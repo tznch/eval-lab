@@ -42,14 +42,8 @@
 
 <section class="card wide setup-card" id="profile-actions-row">
   <h3>Setup</h3>
-  <p class="meta">Share a run recipe (dataset, models, temperature, limits) — no API keys.</p>
+  <p class="meta">Import a shareable run profile or download an example model. Export a run recipe from the Report tab.</p>
   <p class="meta action-row">
-    <button class="btn secondary"
-            type="button"
-            id="btn-export-profile"
-            @click="exportProfileYaml($event)">
-      Export profile YAML
-    </button>
     <label class="btn secondary" for="profile-import-file">
       Import profile YAML
       <input id="profile-import-file"

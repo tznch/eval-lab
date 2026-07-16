@@ -240,36 +240,21 @@ function labApp() {
       }
     },
 
-    async exportProfileYaml(event) {
+    async exportRunProfile(event) {
       const button = event.currentTarget;
-      const status = document.getElementById("profile-action-status");
-      if (!status) return;
-
-      const temps = this.filters.temps || [];
-      let temperature = null;
-      if (temps.length === 1) {
-        const raw = String(temps[0]).replace(/^t/, "");
-        const parsed = Number.parseFloat(raw);
-        if (!Number.isNaN(parsed)) temperature = parsed;
-      }
+      const status =
+        button.parentElement?.querySelector("[data-run-export-status]") ||
+        document.getElementById("profile-action-status");
+      const model = button.dataset.model;
+      const temperature = Number.parseFloat(button.dataset.temperature);
+      if (!status || !model || Number.isNaN(temperature)) return;
 
       const dataset =
         this.filters.dataset && this.filters.dataset !== "all"
           ? this.filters.dataset
           : null;
-      const models =
-        this.filters.models && this.filters.models.length
-          ? this.filters.models.slice()
-          : null;
-
       const stamp = new Date().toISOString().slice(0, 10);
-      const nameParts = [
-        dataset || "run",
-        (models && models[0]) || "model",
-        temperature != null ? `t${temperature}` : null,
-        stamp,
-      ].filter(Boolean);
-      const name = nameParts.join("-");
+      const name = [model, `t${temperature}`, dataset, stamp].filter(Boolean).join("-");
 
       button.disabled = true;
       status.textContent = "Exporting…";
@@ -277,7 +262,12 @@ function labApp() {
         const response = await fetch("/api/profiles/export", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, dataset, temperature, models }),
+          body: JSON.stringify({
+            name,
+            models: [model],
+            temperature,
+            dataset,
+          }),
         });
         const data = await response.json();
         if (!response.ok || !data.ok) {

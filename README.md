@@ -133,7 +133,7 @@ make profile-import PROFILE=profiles/examples/bonsai-sciq-t07.yaml   # example o
 make lab MODEL=<model_id>
 ```
 
-Dashboard: **Export profile YAML** downloads the current recipe (filters + `.env` / `.env.profile`).  
+Dashboard: Report shows one card per `(model, temperature)` with eval tabs; **Export profile YAML** on a card downloads that run's recipe.  
 **Import profile YAML** uploads a shared recipe into `.env.profile` (no API keys).  
 **Download model (example profile)** fetches weights for a known example.
 

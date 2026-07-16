@@ -109,6 +109,7 @@ def test_report_partial_has_run_cards():
     assert "No runs for current filters" in html or "run-card" in html
     if "run-card" in html:
         assert "Export profile YAML" in html
+        assert '@click="$root.exportRunProfile($event)"' in html
         assert 'x-data="{ fw:' in html or "x-data=\"{ fw:" in html
         assert "Promptfoo" in html and "DeepEval" in html and "RAGAS" in html
 
@@ -377,9 +378,25 @@ def test_export_profile_rejects_secret_keys():
     assert r.json()["ok"] is False
 
 
-def test_overview_has_export_profile_button():
+def test_overview_has_no_export_profile_button():
     client = TestClient(create_app())
     r = client.get("/partials/overview")
     assert r.status_code == 200
-    assert "Export profile YAML" in r.text
-    assert "exportProfile" in r.text or "exportProfileYaml" in r.text
+    assert "Export profile YAML" not in r.text
+    assert "Import profile YAML" in r.text
+
+
+def test_export_profile_single_run_overrides(monkeypatch):
+    monkeypatch.setenv("EVAL_DATASET", "sciq")
+    monkeypatch.setenv("MODEL", "qwen27")
+    monkeypatch.setenv("TARGET_TEMPERATURE", "0.9")
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/profiles/export",
+        json={"name": "bonsai-t0.7", "models": ["bonsai"], "temperature": 0.7},
+    )
+    assert r.status_code == 200
+    yaml_text = r.json()["yaml"]
+    assert "id: bonsai" in yaml_text
+    assert "temperature: 0.7" in yaml_text
+    assert "qwen27" not in yaml_text
