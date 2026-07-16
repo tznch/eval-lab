@@ -101,6 +101,18 @@ def test_report_partial():
     assert r.status_code == 200
 
 
+def test_report_partial_has_run_cards():
+    client = TestClient(create_app())
+    r = client.get("/partials/report")
+    assert r.status_code == 200
+    html = r.text
+    assert "No runs for current filters" in html or "run-card" in html
+    if "run-card" in html:
+        assert "Export profile YAML" in html
+        assert 'x-data="{ fw:' in html or "x-data=\"{ fw:" in html
+        assert "Promptfoo" in html and "DeepEval" in html and "RAGAS" in html
+
+
 def test_deepeval_partial():
     client = TestClient(create_app())
     r = client.get("/partials/deepeval")
@@ -148,10 +160,12 @@ def test_promptfoo_panel_summaries():
     assert 'panel=summaries' in r.text
 
 
-def test_report_panel():
+def test_report_partial_ignores_legacy_panel_param():
     client = TestClient(create_app())
     r = client.get("/partials/report?panel=promptfoo")
     assert r.status_code == 200
+    assert "tables" not in r.text
+    assert 'aria-label="Report frameworks"' not in r.text
 
 
 def test_performance_panel():

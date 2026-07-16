@@ -1,68 +1,70 @@
-{% if view.tables %}
-{% set frameworks = view.tables | map(attribute='framework') | list %}
-{% set active = panel if panel in frameworks else frameworks[0] %}
-{% set scope = view.scope or {} %}
-
+{% if view.runs %}
 <p class="meta">
   Generated {{ view.generated_at or '—' }}
-  {% if scope.mode == 'portfolio' %}
-  · Portfolio · {{ view.track_count }} track(s) · {{ view.models | join(' vs ') }}
-  {% else %}
-  · {{ view.models | join(' vs ') }}
-  {% endif %}
+  · {{ view.runs|length }} run(s)
+  · {{ view.track_count }} track(s)
 </p>
 
-<nav class="panel-seg" aria-label="Report frameworks">
-  {% for table in view.tables %}
-  <a class="panel-seg-btn {{ 'active' if table.framework == active else '' }}"
-     href="?view=report&amp;panel={{ table.framework }}"
-     @click.prevent="contentPanel = '{{ table.framework }}'; reloadMain()">{{ table.short_title or table.framework }}</a>
-  {% endfor %}
-</nav>
-
-{% for table in view.tables if table.framework == active %}
-<section class="card wide">
-  <h3>{{ table.title }}</h3>
-  <div class="table-scroll">
-    <table class="compare-table sticky-head summary-table report-table">
-      <thead>
-        <tr>
-          <th>Track</th>
-          {% for model in table.models %}
-          <th class="model-col">{{ model }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in table.rows %}
-        <tr>
-          <td class="track"><span class="tag">{{ row.dataset }}</span></td>
-          {% for cell in row.cells %}
-          <td class="report-cell {{ cell.level }}">
-            {% if cell.missing %}
-            <span class="missing">—</span>
-            {% elif cell.rate is not none %}
-            <div class="rate-cell compact">
-              <span class="rate-val">{{ cell.value }}</span>
-              <span class="rate-bar" aria-hidden="true">
-                <span class="rate-bar-fill {{ cell.level }}"
-                      style="width: {{ cell.rate }}%"></span>
-              </span>
-            </div>
-            {% else %}
-            {{ cell.value }}
-            {% endif %}
-          </td>
-          {% endfor %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% for run in view.runs %}
+<section class="card wide run-card" x-data="{ fw: 'promptfoo' }">
+  <div class="run-group-header">
+    <h3>{{ run.label }}</h3>
+    <button class="btn secondary"
+            type="button"
+            data-model="{{ run.model }}"
+            data-temperature="{{ run.temperature }}"
+            @click="$root.exportRunProfile($event)">
+      Export profile YAML
+    </button>
+    <span class="meta" data-run-export-status aria-live="polite"></span>
   </div>
+
+  <nav class="panel-seg" aria-label="Eval frameworks for {{ run.label }}">
+    <button type="button" class="panel-seg-btn" :class="fw === 'promptfoo' && 'active'" @click="fw = 'promptfoo'">Promptfoo</button>
+    <button type="button" class="panel-seg-btn" :class="fw === 'deepeval' && 'active'" @click="fw = 'deepeval'">DeepEval</button>
+    <button type="button" class="panel-seg-btn" :class="fw === 'ragas' && 'active'" @click="fw = 'ragas'">RAGAS</button>
+  </nav>
+
+  {% for fw_key, fw_label in [('promptfoo','Promptfoo'), ('deepeval','DeepEval'), ('ragas','RAGAS')] %}
+  <div x-show="fw === '{{ fw_key }}'" x-cloak>
+    {% set rows = run.frameworks[fw_key] %}
+    {% if rows %}
+    <div class="table-scroll">
+      <table class="compare-table sticky-head">
+        <thead>
+          <tr>
+            <th>Track</th>
+            {% if fw_key != 'ragas' %}
+            <th>Pass</th><th>Fail</th><th>Total</th><th>Rate</th>
+            {% else %}
+            <th>Scores</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="track"><span class="tag">{{ row.dataset }}</span></td>
+            {% if fw_key != 'ragas' %}
+            <td class="{{ 'missing' if row.missing else 'pass' }}">{{ '—' if row.missing else row.pass }}</td>
+            <td class="{{ 'missing' if row.missing else '' }}">{{ '—' if row.missing else row.fail }}</td>
+            <td class="{{ 'missing' if row.missing else '' }}">{{ '—' if row.missing else row.total }}</td>
+            <td class="{{ 'missing' if row.missing else '' }}">{{ '—' if row.missing else row.value }}</td>
+            {% else %}
+            <td class="{{ 'missing' if row.missing else '' }}">{{ row.value }}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">No {{ fw_label }} tracks for this run.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
 </section>
-{% else %}
-<p class="empty">No table for selected framework.</p>
 {% endfor %}
 {% else %}
-<p class="empty">No comparison data for current filters. Run <code>make portfolio MODEL=bonsai</code>.</p>
+<p class="empty">No runs for current filters.</p>
 {% endif %}
