@@ -1,4 +1,4 @@
-.PHONY: setup download download-sciq download-bonsai download-qwen27 download-qwen36q4 download-realworld prepare prepare-sciq prepare-portfolio prepare-dataset datasets-list clean-results stop-servers promptfoo-tests server server-bonsai server-qwen27 smoke-judge smoke-target smoke-bonsai eval-promptfoo eval-promptfoo-ifeval eval-deepeval eval-ragas eval-all lab lab-portfolio portfolio portfolio-qwen27 dashboard export-report dashboard-serve profile-export profile-import
+.PHONY: setup download download-sciq download-bonsai download-qwen27 download-qwen36q4 download-realworld prepare prepare-sciq prepare-portfolio prepare-dataset datasets-list clean-results stop-servers promptfoo-tests server server-bonsai server-qwen27 smoke-judge smoke-target smoke-bonsai eval-promptfoo eval-promptfoo-ifeval eval-deepeval eval-ragas eval-all lab lab-portfolio portfolio portfolio-qwen27 dashboard export-report dashboard-serve profile-export profile-import tools-update
 
 VENV := .venv/bin
 EVAL_DATASET ?= sciq
@@ -148,6 +148,9 @@ profile-export:
 # profile-import: PROFILE=profiles/examples/bonsai-sciq-t07.yaml
 profile-import:
 	$(VENV)/python scripts/profile_cli.py import --profile $(PROFILE)
+
+tools-update:
+	bash scripts/tools_update.sh
 
 test:
 	$(VENV)/pytest tests/ -v
