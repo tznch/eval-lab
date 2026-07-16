@@ -44,6 +44,18 @@ def export_profile_from_env(name: str) -> RunProfile:
     return profile_from_dict(data)
 
 
+def _validate_env_value(key: str, value: str) -> None:
+    if "\r" in value or "\n" in value:
+        raise ValueError(f"{key} must not contain newline characters")
+
+
+def _format_env_value(value: str) -> str:
+    if any(char in value for char in " #="):
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+    return value
+
+
 def write_env_profile(
     profile: RunProfile, path: Path = Path(".env.profile")
 ) -> None:
@@ -58,7 +70,9 @@ def write_env_profile(
     if profile.judge_model:
         values.append(("JUDGE_MODEL", profile.judge_model))
 
-    path.write_text(
-        "".join(f"{key}={value}\n" for key, value in values),
-        encoding="utf-8",
-    )
+    lines: list[str] = []
+    for key, value in values:
+        _validate_env_value(key, value)
+        lines.append(f"{key}={_format_env_value(value)}")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

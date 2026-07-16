@@ -97,6 +97,49 @@ def test_roundtrip_yaml(tmp_path: Path):
     assert loaded.limits.promptfoo == 10
 
 
+def test_write_env_profile_rejects_newline_injection(tmp_path: Path):
+    p = profile_from_dict(
+        {
+            "name": "bad",
+            "dataset": "sciq\nHF_TOKEN=secret",
+            "models": [{"id": "bonsai"}],
+        }
+    )
+    out = tmp_path / ".env.profile"
+    with pytest.raises(ValueError, match="newline"):
+        write_env_profile(p, out)
+
+
+def test_write_env_profile_rejects_newline_in_judge_model(tmp_path: Path):
+    p = profile_from_dict(
+        {
+            "name": "bad",
+            "dataset": "sciq",
+            "models": [{"id": "bonsai"}],
+            "judge_model": "model\nHF_TOKEN=secret",
+        }
+    )
+    out = tmp_path / ".env.profile"
+    with pytest.raises(ValueError, match="newline"):
+        write_env_profile(p, out)
+
+
+def test_write_env_profile_quotes_special_characters(tmp_path: Path):
+    p = profile_from_dict(
+        {
+            "name": "demo",
+            "dataset": "data set",
+            "models": [{"id": "bonsai"}],
+            "judge_model": "vendor/model#free",
+        }
+    )
+    out = tmp_path / ".env.profile"
+    write_env_profile(p, out)
+    text = out.read_text()
+    assert 'EVAL_DATASET="data set"' in text
+    assert 'JUDGE_MODEL="vendor/model#free"' in text
+
+
 def test_write_env_profile_omits_secrets(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-secret")
     p = profile_from_dict(
