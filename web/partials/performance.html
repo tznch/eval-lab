@@ -1,0 +1,58 @@
+{% with guide=view.guide %}{% include "_guide.html" %}{% endwith %}
+
+<p class="meta">
+  Export: <a href="/exports/performance.json" download>performance.json</a>
+  · <a href="/exports/combined_report.json" download>combined_report.json</a>
+</p>
+
+{% if view.empty %}
+<p class="empty">No performance data for current filters — run <code>make portfolio MODEL=bonsai</code> first.</p>
+{% else %}
+{% set fq = filters.to_query() %}
+{% set labels = {
+  'specs': 'Model specs',
+  'rollup': 'Portfolio rollup',
+  'promptfoo': 'Promptfoo latency',
+  'deepeval': 'DeepEval wall time',
+} %}
+{% set active = panel if panel in view.by_key else 'specs' %}
+{% set table = view.by_key[active] %}
+
+<nav class="panel-tabs" role="tablist" aria-label="Performance tables">
+  {% for key, label in labels.items() %}
+  <button type="button"
+          class="sub-tab-btn {{ 'active' if key == active else '' }}"
+          role="tab"
+          aria-selected="{{ 'true' if key == active else 'false' }}"
+          hx-get="/partials/performance?{{ fq }}{% if fq %}&{% endif %}panel={{ key }}"
+          hx-target="#main-content"
+          hx-swap="innerHTML">{{ label }}</button>
+  {% endfor %}
+</nav>
+
+<section class="card wide">
+  <h3>{{ table.title }}</h3>
+  <div class="table-scroll">
+    <table class="compare-table sticky-head">
+      <thead>
+        <tr>
+          <th>{{ table.headers[0] }}</th>
+          {% for h in table.headers[1:] %}
+          <th class="model-col">{{ h }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+        <tr>
+          <td class="track">{{ row[0] }}</td>
+          {% for cell in row[1:] %}
+          <td class="{{ 'missing' if cell == '—' else '' }}">{{ cell }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}

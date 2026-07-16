@@ -1,0 +1,36 @@
+{% with guide=view.guide %}{% include "_guide.html" %}{% endwith %}
+
+<h2>Results</h2>
+{% if view.sections %}
+{% for section in view.sections %}
+<details class="card wide accordion-card" {% if loop.first %}open{% endif %}>
+  <summary>
+    <span class="run-group-header">
+      <strong>{{ section.model }} · {{ section.config }}</strong>
+      <span class="meta">{{ section.filename }} · {{ section.sample_count }} samples</span>
+    </span>
+  </summary>
+  <div class="accordion-body">
+    <div class="table-scroll">
+      <table class="data-table sticky-head">
+        <thead>
+          <tr>{% for h in section.headers %}<th>{{ h }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody>
+          {% for row in section.rows %}
+          <tr>{% for h in section.headers %}<td>{{ row.get(h, '') }}</td>{% endfor %}</tr>
+          {% endfor %}
+          <tr class="avg-row">
+            {% for h in section.headers %}
+            <td>{% if section.avg_row.get(h) %}<strong>{{ section.avg_row[h] }}</strong>{% else %}—{% endif %}</td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</details>
+{% endfor %}
+{% else %}
+<p class="empty">No RAGAS results for current filters.</p>
+{% endif %}

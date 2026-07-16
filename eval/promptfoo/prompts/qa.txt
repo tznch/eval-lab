@@ -1,0 +1,6 @@
+Context:
+{{context}}
+
+Question: {{question}}
+
+Answer concisely using only the context above. Give the final answer only — no reasoning or thinking steps.

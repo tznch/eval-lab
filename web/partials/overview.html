@@ -1,0 +1,53 @@
+<p class="meta">Live dashboard · filters apply to all tabs</p>
+
+<section class="card wide">
+  <h3>Eval progress</h3>
+  <div id="progress-panel"
+       hx-get="/partials/progress"
+       hx-trigger="load, every 3s"
+       hx-swap="innerHTML">
+    Loading progress…
+  </div>
+</section>
+
+<h2>Framework runs</h2>
+<div class="grid">
+  <div class="card">
+    <h3>Promptfoo</h3>
+    <p class="meta">{{ view.runs.promptfoo }} run(s)</p>
+    <button class="btn" type="button" @click="$dispatch('switch-tab', 'promptfoo')">Promptfoo →</button>
+  </div>
+  <div class="card">
+    <h3>DeepEval</h3>
+    <p class="meta">{{ view.runs.deepeval }} run(s)</p>
+    <button class="btn" type="button" @click="$dispatch('switch-tab', 'deepeval')">DeepEval →</button>
+  </div>
+  <div class="card">
+    <h3>RAGAS</h3>
+    <p class="meta">{{ view.runs.ragas }} run(s)</p>
+    <button class="btn" type="button" @click="$dispatch('switch-tab', 'ragas')">RAGAS →</button>
+  </div>
+  <div class="card">
+    <h3>Performance</h3>
+    <p class="meta">Latency · RAM · tok/s</p>
+    <button class="btn" type="button" @click="$dispatch('switch-tab', 'performance')">Performance →</button>
+  </div>
+</div>
+
+<p class="meta action-row">
+  <button class="btn secondary" type="button" @click="$dispatch('switch-tab', 'report')">Combined report →</button>
+  <button class="btn secondary" type="button" @click="$dispatch('switch-tab', 'failures')">Failure analysis →</button>
+  <a class="btn secondary" href="/exports/combined_report.json" download>JSON export</a>
+</p>
+
+<p class="meta action-row" id="profile-download-row">
+  <button class="btn secondary"
+          type="button"
+          id="btn-download-profile-model"
+          data-profile="profiles/examples/bonsai-sciq-t07.yaml"
+          data-model-id="bonsai"
+          @click="downloadProfileModel($event)">
+    Download model (from profile)
+  </button>
+  <span id="profile-download-status" class="meta" aria-live="polite"></span>
+</p>

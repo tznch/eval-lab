@@ -1,0 +1,27 @@
+{% if groups %}
+{% for group in groups %}
+<details class="run-group card wide accordion-card" {% if loop.first %}open{% endif %}>
+  <summary>
+    <span class="run-group-header">
+      <strong>{{ group.label }}</strong>
+      <span class="tag">{{ group.track_count }} tracks</span>
+      <span class="meta">pass {{ group.pass_rate }} · {{ group.passed_total }}/{{ group.tests_total }}</span>
+    </span>
+  </summary>
+  <div class="accordion-body">
+    <div class="grid">
+      {% for track in group.tracks %}
+      <div class="card">
+        <h4>{{ track.dataset }}</h4>
+        <div class="stat"><span class="pass">{{ track.passed }}</span> / {{ track.tests }}</div>
+        <p>{{ track.failures }} failures · {{ track.errors }} errors · {{ track.time }}s</p>
+        <p class="meta">{{ track.path }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</details>
+{% endfor %}
+{% else %}
+<p class="empty">No DeepEval results for current filters.</p>
+{% endif %}

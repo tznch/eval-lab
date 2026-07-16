@@ -1,0 +1,18 @@
+id: financial_qa
+name: Financial QA (10-K)
+task_type: extractive_qa
+topic: Fintech / SEC filing RAG
+description: Questions over SEC 10-K excerpts with short factual answers.
+hf_id: virattt/financial-qa-10K
+task_prompt: Answer from filing context using only the provided excerpt.
+
+source:
+  type: legacy
+  legacy: financial_qa
+
+eval:
+  prompt: qa
+  portfolio: true
+
+limits:
+  default: 50

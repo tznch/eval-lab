@@ -1,0 +1,23 @@
+<details class="guide-card">
+  <summary>
+    <span class="guide-summary-title">{{ guide.title }}</span>
+    <span class="tagline">{{ guide.tagline }}</span>
+  </summary>
+  <div class="guide-body">
+    <p>{{ guide.what_it_does }}</p>
+    <h3>How to read</h3>
+    <ul class="guide-list">
+      {% for item in guide.how_to_read %}
+      <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+    {% if guide.caveats %}
+    <h3>Caveats</h3>
+    <ul class="guide-list">
+      {% for item in guide.caveats %}
+      <li>{{ item }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</details>

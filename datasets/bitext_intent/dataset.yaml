@@ -1,0 +1,18 @@
+id: bitext_intent
+name: Bitext Support Intent
+task_type: intent
+topic: Customer support intent routing
+description: User instructions mapped to support intents (HF subset).
+hf_id: bitext/Bitext-customer-support-llm-chatbot-training-dataset
+task_prompt: Classify the user message into the correct support intent label.
+
+source:
+  type: legacy
+  legacy: bitext_intent
+
+eval:
+  prompt: intent
+  portfolio: true
+
+limits:
+  default: 50

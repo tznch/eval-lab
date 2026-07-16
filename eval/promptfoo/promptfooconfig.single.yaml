@@ -1,0 +1,20 @@
+description: "UDA-QA feta - single target model ({{env.EVAL_MODEL_ID}})"
+
+prompts:
+  - file://prompts/qa.txt
+
+providers:
+  - id: "openai:chat:{{env.TARGET_MODEL_NAME}}"
+    label: "{{env.EVAL_MODEL_ID}}"
+    config:
+      apiBaseUrl: "{{env.TARGET_MODEL_BASE_URL}}"
+      apiKey: local
+      max_tokens: 512
+      temperature: "{{env.TARGET_TEMPERATURE}}"
+
+tests: file://tests/generated.yaml
+
+outputPath: "{{env.PROMPTFOO_OUTPUT}}"
+
+evaluateOptions:
+  maxConcurrency: 1

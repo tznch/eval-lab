@@ -1,0 +1,74 @@
+{% if view.tables %}
+{% set fq = filters.to_query() %}
+{% set frameworks = view.tables | map(attribute='framework') | list %}
+{% set active = panel if panel in frameworks else frameworks[0] %}
+{% set scope = view.scope or {} %}
+
+<p class="meta">
+  Generated {{ view.generated_at or '—' }}
+  {% if scope.mode == 'portfolio' %}
+  · Portfolio · {{ view.track_count }} track(s) · {{ view.models | join(' vs ') }}
+  {% else %}
+  · {{ view.models | join(' vs ') }}
+  {% endif %}
+</p>
+
+<nav class="panel-tabs" role="tablist" aria-label="Report frameworks">
+  {% for table in view.tables %}
+  <button type="button"
+          class="sub-tab-btn {{ 'active' if table.framework == active else '' }}"
+          role="tab"
+          aria-selected="{{ 'true' if table.framework == active else 'false' }}"
+          hx-get="/partials/report?{{ fq }}{% if fq %}&{% endif %}panel={{ table.framework }}"
+          hx-target="#main-content"
+          hx-swap="innerHTML"
+          hx-push-url="true">{{ table.short_title or table.framework }}</button>
+  {% endfor %}
+</nav>
+
+{% for table in view.tables if table.framework == active %}
+<section class="card wide">
+  <h3>{{ table.title }}</h3>
+  <div class="table-scroll">
+    <table class="compare-table sticky-head summary-table report-table">
+      <thead>
+        <tr>
+          <th>Track</th>
+          {% for model in table.models %}
+          <th class="model-col">{{ model }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+        <tr>
+          <td class="track"><span class="tag">{{ row.dataset }}</span></td>
+          {% for cell in row.cells %}
+          <td class="report-cell {{ cell.level }}">
+            {% if cell.missing %}
+            <span class="missing">—</span>
+            {% elif cell.rate is not none %}
+            <div class="rate-cell compact">
+              <span class="rate-val">{{ cell.value }}</span>
+              <span class="rate-bar" aria-hidden="true">
+                <span class="rate-bar-fill {{ cell.level }}"
+                      style="width: {{ cell.rate }}%"></span>
+              </span>
+            </div>
+            {% else %}
+            {{ cell.value }}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<p class="empty">No table for selected framework.</p>
+{% endfor %}
+{% else %}
+<p class="empty">No comparison data for current filters. Run <code>make portfolio MODEL=bonsai</code>.</p>
+{% endif %}

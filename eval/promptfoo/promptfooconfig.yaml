@@ -1,0 +1,28 @@
+description: UDA-QA feta — compare Gemma vs Bonsai-27B-Q1
+
+prompts:
+  - file://prompts/qa.txt
+
+providers:
+  - id: openai:chat:gemma-4-26b-a4b
+    label: gemma-26b
+    config:
+      apiBaseUrl: http://127.0.0.1:8080/v1
+      apiKey: local
+      max_tokens: 512
+      temperature: 0.2
+
+  - id: openai:chat:bonsai-27b-q1
+    label: bonsai-27b-q1
+    config:
+      apiBaseUrl: http://127.0.0.1:8081/v1
+      apiKey: local
+      max_tokens: 512
+      temperature: 0.7
+
+tests: file://tests/generated.yaml
+
+outputPath: ../../results/promptfoo/compare.json
+
+evaluateOptions:
+  maxConcurrency: 1

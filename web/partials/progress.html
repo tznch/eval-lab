@@ -1,0 +1,27 @@
+<div id="eval-progress" class="progress-card">
+  {% if status.status == 'idle' %}
+    <p class="meta">No eval running. Start with <code>make portfolio MODEL=bonsai</code>.</p>
+  {% elif status.status == 'running' %}
+    <div class="progress-meta">
+      <strong>{{ status.model }} · {{ status.temp_tag }}</strong>
+      · step {{ status.step }}/{{ status.total_steps }}
+      {% if status.current %}
+        · now: {{ status.current.framework }} · {{ status.current.track }}
+      {% endif %}
+    </div>
+    {% set pct = (status.step / status.total_steps * 100) if status.total_steps else 0 %}
+    <div class="bar-track progress-bar">
+      <div class="bar-fill" style="width: {{ '%.1f'|format(pct) }}%"></div>
+    </div>
+    <div class="track-dots">
+      {% for item in status.completed %}
+        <span class="dot ok" title="{{ item.track }} · {{ item.framework }}">✓</span>
+      {% endfor %}
+      {% if status.current %}
+        <span class="dot active" title="in progress">◐</span>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="meta">Eval {{ status.status }}.</p>
+  {% endif %}
+</div>
