@@ -32,6 +32,17 @@ def test_profile_rejects_secret_keys():
         )
 
 
+def test_profile_rejects_nested_secret_keys():
+    with pytest.raises(ValueError, match="secret"):
+        profile_from_dict(
+            {
+                "name": "bad",
+                "dataset": "sciq",
+                "models": [{"id": "bonsai", "HF_TOKEN": "hf_xxx"}],
+            }
+        )
+
+
 def test_profile_requires_name_dataset_model():
     with pytest.raises(ValueError):
         profile_from_dict({"dataset": "sciq", "models": [{"id": "bonsai"}]})
