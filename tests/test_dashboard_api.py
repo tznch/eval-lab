@@ -154,6 +154,31 @@ def test_download_missing_profile():
     assert r.json()["ok"] is False
 
 
+def test_download_rejects_non_string_profile():
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/models/download",
+        json={"profile": {}, "model_id": "bonsai"},
+    )
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+    assert "profile" in r.json()["message"].lower()
+
+
+def test_download_rejects_non_string_model_id():
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/models/download",
+        json={
+            "profile": "profiles/examples/bonsai-sciq-t07.yaml",
+            "model_id": ["bonsai"],
+        },
+    )
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+    assert "model_id" in r.json()["message"].lower()
+
+
 def test_download_rejects_profile_path_outside_root():
     client = TestClient(create_app())
     r = client.post(

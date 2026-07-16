@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import Body, FastAPI, Request
+from pydantic import BaseModel, ConfigDict, ValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -55,6 +56,13 @@ def _panel(request: Request) -> str | None:
     return request.query_params.get("panel")
 
 
+class ModelDownloadPayload(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    profile: str | None = None
+    model_id: str | None = None
+
+
 def create_app() -> FastAPI:
     app = FastAPI(title="LLM Eval Lab Dashboard")
     templates = Jinja2Templates(directory=PARTIALS)
@@ -94,9 +102,23 @@ def create_app() -> FastAPI:
                 status_code=400,
             )
 
+        try:
+            body = ModelDownloadPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Invalid request body: profile must be a string "
+                        "and model_id must be a string or null"
+                    ),
+                    "path": None,
+                },
+                status_code=400,
+            )
+
         relative_path = (
-            payload.get("profile")
-            or "profiles/examples/bonsai-sciq-t07.yaml"
+            body.profile or "profiles/examples/bonsai-sciq-t07.yaml"
         )
         profile_path = (ROOT / relative_path).resolve()
         if (
@@ -114,9 +136,7 @@ def create_app() -> FastAPI:
 
         try:
             profile = load_profile(profile_path)
-            output_path = download_profile_model(
-                profile, payload.get("model_id")
-            )
+            output_path = download_profile_model(profile, body.model_id)
         except ValueError as exc:
             return JSONResponse(
                 {"ok": False, "message": str(exc), "path": None},
