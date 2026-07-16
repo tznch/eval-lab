@@ -51,9 +51,10 @@ def test_build_performance_view_empty_framework():
     assert view["empty"] is True
 
 
-def test_build_report_short_titles():
+def test_build_report_view_returns_runs():
     catalog = {
         "generated_at": "2026-01-01",
+        "scope": {"mode": "portfolio"},
         "comparison": {
             "models": ["bonsai (t0.2)"],
             "runs": [{"model": "bonsai", "temp_tag": "t0.2"}],
@@ -62,16 +63,33 @@ def test_build_report_short_titles():
                     "dataset": "sciq",
                     "models": {
                         "bonsai (t0.2)": {
-                            "promptfoo": {"pass": 5, "total": 10, "pass_rate": 0.5},
+                            "promptfoo": {"pass": 5, "fail": 5, "total": 10, "pass_rate": 0.5},
+                            "deepeval": {"pass": 9, "fail": 1, "total": 10, "pass_rate": 0.9},
+                            "ragas": {"averages": {"faithfulness": 0.8, "answer_relevancy": 0.7}},
                         },
                     },
                 }
             ],
         },
     }
-    filters = FilterState(models=["bonsai"], temps=["t0.2"], dataset="all", frameworks=["promptfoo"])
+    filters = FilterState(
+        models=["bonsai"], temps=["t0.2"], dataset="all",
+        frameworks=["promptfoo", "deepeval", "ragas"],
+    )
     view = build_report_view(filters, catalog)
-    assert view["tables"][0]["short_title"] == "Promptfoo"
+    assert "tables" not in view
+    assert len(view["runs"]) == 1
+    run = view["runs"][0]
+    assert run["model"] == "bonsai"
+    assert run["temp_tag"] == "t0.2"
+    assert run["temperature"] == 0.2
+    assert run["label"] == "bonsai · t=0.2"
+    assert set(run["frameworks"]) == {"promptfoo", "deepeval", "ragas"}
+    pf = run["frameworks"]["promptfoo"][0]
+    assert pf["dataset"] == "sciq"
+    assert pf["pass"] == 5
+    assert pf["missing"] is False
+    assert pf["rate"] == 50.0
 
 
 def test_report_cell_levels():
@@ -101,32 +119,41 @@ def test_build_deepeval_groups(tmp_path, monkeypatch):
     assert groups[0]["passed_total"] == 9
 
 
-def test_build_report_view_filters_columns():
+def test_build_report_view_filters_runs_and_datasets():
     catalog = {
         "generated_at": "2026-01-01",
         "comparison": {
-            "models": ["bonsai (t0.2)", "qwen27 (t0.2)"],
+            "models": ["bonsai (t0.2)", "qwen27 (t0.2)", "bonsai (t0.7)"],
             "runs": [
                 {"model": "bonsai", "temp_tag": "t0.2"},
                 {"model": "qwen27", "temp_tag": "t0.2"},
+                {"model": "bonsai", "temp_tag": "t0.7"},
             ],
             "tracks": [
                 {
                     "dataset": "sciq",
                     "models": {
-                        "bonsai (t0.2)": {
-                            "promptfoo": {"pass": 5, "total": 10, "pass_rate": 0.5},
-                        },
-                        "qwen27 (t0.2)": {
-                            "promptfoo": {"pass": 8, "total": 10, "pass_rate": 0.8},
-                        },
+                        "bonsai (t0.2)": {"promptfoo": {"pass": 5, "fail": 5, "total": 10, "pass_rate": 0.5}},
+                        "qwen27 (t0.2)": {"promptfoo": {"pass": 8, "fail": 2, "total": 10, "pass_rate": 0.8}},
+                        "bonsai (t0.7)": {"promptfoo": {"pass": 6, "fail": 4, "total": 10, "pass_rate": 0.6}},
                     },
-                }
+                },
+                {
+                    "dataset": "uda_qa",
+                    "models": {
+                        "bonsai (t0.2)": {"promptfoo": {"pass": 1, "fail": 1, "total": 2, "pass_rate": 0.5}},
+                    },
+                },
             ],
         },
     }
-    filters = FilterState(models=["bonsai"], temps=["t0.2"], dataset="all", frameworks=["promptfoo"])
+    filters = FilterState(
+        models=["bonsai"], temps=["t0.2"], dataset="sciq",
+        frameworks=["promptfoo", "deepeval", "ragas"],
+    )
     view = build_report_view(filters, catalog)
-    assert view["models"] == ["bonsai (t0.2)"]
-    assert len(view["tables"]) == 1
-    assert view["tables"][0]["rows"][0]["cells"][0]["value"].startswith("5/10")
+    assert [r["label"] for r in view["runs"]] == ["bonsai · t=0.2"]
+    assert [row["dataset"] for row in view["runs"][0]["frameworks"]["promptfoo"]] == ["sciq"]
+    # Tabs always present even if framework filter would have dropped matrix tables before
+    assert "deepeval" in view["runs"][0]["frameworks"]
+    assert "ragas" in view["runs"][0]["frameworks"]

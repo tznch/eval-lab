@@ -14,7 +14,7 @@ from shared.reporting.combined_report import (
     _format_ragas_cell,
     build_combined_report,
 )
-from shared.reporting.dashboard_catalog import build_dashboard_catalog, run_key
+from shared.reporting.dashboard_catalog import build_dashboard_catalog
 from shared.reporting.dashboard_filters import FilterState
 from shared.reporting.eval_agenda import FRAMEWORK_GUIDES, get_dataset_info
 from shared.reporting.failure_analysis import build_portfolio_failure_report
@@ -123,57 +123,72 @@ def build_deepeval_groups(filters: FilterState) -> list[dict]:
     return sorted(groups, key=lambda g: (g["model"], g["temp_tag"]))
 
 
+def _temp_from_tag(temp_tag: str) -> float:
+    return float(temp_tag.removeprefix("t"))
+
+
+def _framework_track_row(fw_key: str, dataset: str, raw: dict | None) -> dict:
+    formatted = {
+        "promptfoo": _format_promptfoo_cell,
+        "deepeval": _format_deepeval_cell,
+        "ragas": _format_ragas_cell,
+    }[fw_key](raw)
+    cell = _report_cell(fw_key, raw, formatted)
+    row = {
+        "dataset": dataset,
+        "missing": cell["missing"],
+        "value": cell["value"],
+        "rate": cell.get("rate"),
+        "level": cell.get("level", "missing"),
+    }
+    if fw_key in ("promptfoo", "deepeval"):
+        if raw:
+            total = int(raw.get("total") or 0)
+            passed = int(raw.get("pass") or 0)
+            fail = int(raw["fail"]) if raw.get("fail") is not None else max(total - passed, 0)
+            row.update({"pass": passed, "fail": fail, "total": total})
+        else:
+            row.update({"pass": None, "fail": None, "total": None})
+    return row
+
+
 def build_report_view(filters: FilterState, catalog: dict) -> dict:
     comparison = catalog.get("comparison") or {}
     runs_meta = comparison.get("runs") or []
-    all_models = comparison.get("models") or []
+    all_labels = comparison.get("models") or []
     all_tracks = comparison.get("tracks") or []
-
-    indices = [
-        i
-        for i, r in enumerate(runs_meta)
-        if filters.matches_run(r["model"], r["temp_tag"])
-    ]
-    models = [all_models[i] for i in indices if i < len(all_models)]
-    run_keys = [run_key(runs_meta[i]["model"], runs_meta[i]["temp_tag"]) for i in indices]
-
     tracks = [t for t in all_tracks if filters.matches_dataset(t["dataset"])]
 
-    tables = []
-    specs = [
-        ("promptfoo", "Promptfoo — pass rate", _format_promptfoo_cell),
-        ("deepeval", "DeepEval — judge pass rate", _format_deepeval_cell),
-        ("ragas", "RAGAS — faithfulness · relevancy", _format_ragas_cell),
-    ]
-    for fw_key, title, formatter in specs:
-        if not filters.includes_framework(fw_key):
+    runs = []
+    for meta, label in zip(runs_meta, all_labels):
+        model = meta["model"]
+        temp_tag = meta["temp_tag"]
+        if not filters.matches_run(model, temp_tag):
             continue
-        rows = []
-        for track in tracks:
-            cells = []
-            for model in models:
-                raw_data = track["models"].get(model, {}).get(fw_key)
-                formatted = formatter(raw_data)
-                cells.append(_report_cell(fw_key, raw_data, formatted))
-            rows.append({"dataset": track["dataset"], "cells": cells})
-        if models and rows:
-            short = {"promptfoo": "Promptfoo", "deepeval": "DeepEval", "ragas": "RAGAS"}[fw_key]
-            tables.append(
-                {
-                    "title": title,
-                    "short_title": short,
-                    "framework": fw_key,
-                    "models": models,
-                    "run_keys": run_keys,
-                    "rows": rows,
-                }
-            )
+        frameworks = {}
+        for fw in ("promptfoo", "deepeval", "ragas"):
+            rows = []
+            for track in tracks:
+                raw = (track.get("models") or {}).get(label, {}).get(fw)
+                # Framework filter: still emit rows, but mark missing if fw filtered out
+                if not filters.includes_framework(fw):
+                    raw = None
+                rows.append(_framework_track_row(fw, track["dataset"], raw))
+            frameworks[fw] = rows
+        runs.append(
+            {
+                "model": model,
+                "temp_tag": temp_tag,
+                "temperature": _temp_from_tag(temp_tag),
+                "label": f"{model} · t={temp_tag.removeprefix('t')}",
+                "frameworks": frameworks,
+            }
+        )
 
-    scope = catalog.get("scope") or {}
+    runs.sort(key=lambda r: (r["model"], r["temperature"]))
     return {
-        "models": models,
-        "tables": tables,
-        "scope": scope,
+        "runs": runs,
+        "scope": catalog.get("scope") or {},
         "track_count": len(tracks),
         "generated_at": catalog.get("generated_at"),
     }
