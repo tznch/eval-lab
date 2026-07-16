@@ -109,8 +109,9 @@ def test_report_partial_has_run_cards():
     assert "No runs for current filters" in html or "run-card" in html
     if "run-card" in html:
         assert "Export profile YAML" in html
-        assert '@click="$root.exportRunProfile($event)"' in html
+        assert '@click="exportRunProfile($event)"' in html
         assert 'x-data="{ fw:' in html or "x-data=\"{ fw:" in html
+        assert 'run-card" x-data=' not in html
         assert "Promptfoo" in html and "DeepEval" in html and "RAGAS" in html
 
 

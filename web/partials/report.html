@@ -6,19 +6,20 @@
 </p>
 
 {% for run in view.runs %}
-<section class="card wide run-card" x-data="{ fw: 'promptfoo' }">
+<section class="card wide run-card">
   <div class="run-group-header">
     <h3>{{ run.label }}</h3>
     <button class="btn secondary"
             type="button"
             data-model="{{ run.model }}"
             data-temperature="{{ run.temperature }}"
-            @click="$root.exportRunProfile($event)">
+            @click="exportRunProfile($event)">
       Export profile YAML
     </button>
     <span class="meta" data-run-export-status aria-live="polite"></span>
   </div>
 
+  <div x-data="{ fw: 'promptfoo' }">
   <nav class="panel-seg" aria-label="Eval frameworks for {{ run.label }}">
     <button type="button" class="panel-seg-btn" :class="fw === 'promptfoo' && 'active'" @click="fw = 'promptfoo'">Promptfoo</button>
     <button type="button" class="panel-seg-btn" :class="fw === 'deepeval' && 'active'" @click="fw = 'deepeval'">DeepEval</button>
@@ -63,6 +64,7 @@
     {% endif %}
   </div>
   {% endfor %}
+  </div>
 </section>
 {% endfor %}
 {% else %}
