@@ -67,8 +67,12 @@ Optional Promptfoo UI: http://127.0.0.1:15500/
 
 ```bash
 make export-report      # results/report/ without serving
-make dashboard-serve    # live UI only
+make dashboard-serve    # binds 127.0.0.1:3100 only (default)
 # DASHBOARD_PORT=3000 make dashboard-serve
+# Remote Firefox over SSH:
+#   ssh -L 3100:127.0.0.1:3100 user@host
+# Opt-in LAN bind (not the default):
+#   DASHBOARD_HOST=0.0.0.0 make dashboard-serve
 ```
 
 ## Judge (OpenRouter)
@@ -129,7 +133,8 @@ make profile-import PROFILE=profiles/examples/bonsai-sciq-t07.yaml   # example o
 make lab MODEL=<model_id>
 ```
 
-Dashboard: **Download model (from profile)** uses the same helpers + `HF_TOKEN` from `.env`.
+Dashboard: **Import profile YAML** uploads a shared recipe into `.env.profile` (no API keys).  
+**Download model (example profile)** fetches weights for a known example.
 
 ## Update eval tools
 

@@ -260,7 +260,7 @@ function labApp() {
 
     async downloadProfileModel(event) {
       const button = event.currentTarget;
-      const status = document.getElementById("profile-download-status");
+      const status = document.getElementById("profile-action-status");
       if (!status) return;
 
       button.disabled = true;
@@ -283,6 +283,32 @@ function labApp() {
         status.textContent = error instanceof Error ? error.message : "Download failed";
       } finally {
         button.disabled = false;
+      }
+    },
+
+    async importProfileFile(event) {
+      const input = event.currentTarget;
+      const status = document.getElementById("profile-action-status");
+      const file = input.files && input.files[0];
+      if (!status || !file) return;
+
+      status.textContent = `Importing ${file.name}…`;
+      try {
+        const yamlText = await file.text();
+        const response = await fetch("/api/profiles/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ yaml: yamlText }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "Import failed");
+        }
+        status.textContent = data.message || "Imported";
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Import failed";
+      } finally {
+        input.value = "";
       }
     },
   };

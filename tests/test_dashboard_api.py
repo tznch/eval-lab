@@ -214,3 +214,49 @@ def test_download_calls_dispatcher(monkeypatch):
         "path": "/tmp/fake.gguf",
     }
     assert called["id"] == "bonsai"
+
+
+def test_import_profile_writes_env_profile(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env.profile"
+    monkeypatch.setattr("scripts.dashboard_api.ROOT", tmp_path)
+    client = TestClient(create_app())
+    yaml_text = """
+name: ui-import
+dataset: sciq
+temperature: 0.7
+models:
+  - id: bonsai
+limits:
+  promptfoo: 10
+  deepeval: 5
+  ragas: 5
+"""
+    r = client.post("/api/profiles/import", json={"yaml": yaml_text})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["dataset"] == "sciq"
+    assert env_path.is_file()
+    text = env_path.read_text()
+    assert "EVAL_DATASET=sciq" in text
+    assert "OPENROUTER" not in text
+
+
+def test_import_profile_rejects_secret_keys():
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/profiles/import",
+        json={
+            "yaml": "name: x\ndataset: sciq\nmodels:\n  - id: bonsai\n",
+            "HF_TOKEN": "nope",
+        },
+    )
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+
+
+def test_import_profile_rejects_invalid_yaml():
+    client = TestClient(create_app())
+    r = client.post("/api/profiles/import", json={"yaml": "- just a list\n"})
+    assert r.status_code == 400
+    assert r.json()["ok"] is False

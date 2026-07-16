@@ -40,7 +40,15 @@
   <a class="btn secondary" href="/exports/combined_report.json" download>JSON export</a>
 </p>
 
-<p class="meta action-row" id="profile-download-row">
+<p class="meta action-row" id="profile-actions-row">
+  <label class="btn secondary" for="profile-import-file">
+    Import profile YAML
+    <input id="profile-import-file"
+           type="file"
+           accept=".yaml,.yml,text/yaml,text/x-yaml,application/x-yaml"
+           hidden
+           @change="importProfileFile($event)">
+  </label>
   <button class="btn secondary"
           type="button"
           id="btn-download-profile-model"
@@ -49,5 +57,5 @@
           @click="downloadProfileModel($event)">
     Download model (example profile)
   </button>
-  <span id="profile-download-status" class="meta" aria-live="polite"></span>
+  <span id="profile-action-status" class="meta" aria-live="polite"></span>
 </p>

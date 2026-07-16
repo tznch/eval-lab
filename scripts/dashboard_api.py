@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from shared.profiles import SECRET_KEYS
 from shared.profiles.download import download_profile_model
-from shared.profiles.io import load_profile
+from shared.profiles.io import load_profile, load_profile_yaml, write_env_profile
 from shared.reporting.dashboard_filters import parse_filter_params
 from shared.reporting.dashboard_views import (
     build_deepeval_groups,
@@ -61,6 +61,12 @@ class ModelDownloadPayload(BaseModel):
 
     profile: str | None = None
     model_id: str | None = None
+
+
+class ProfileImportPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    yaml: str
 
 
 def create_app() -> FastAPI:
@@ -153,6 +159,74 @@ def create_app() -> FastAPI:
                 "ok": True,
                 "message": "Download complete",
                 "path": str(output_path),
+            }
+        )
+
+    @app.post("/api/profiles/import")
+    def api_profiles_import(payload: dict = Body(...)) -> JSONResponse:
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Secret keys not allowed in body: "
+                        + ", ".join(bad_keys)
+                    ),
+                },
+                status_code=400,
+            )
+
+        try:
+            body = ProfileImportPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": "Invalid request body: yaml must be a string",
+                },
+                status_code=400,
+            )
+
+        text = body.yaml.strip()
+        if not text:
+            return JSONResponse(
+                {"ok": False, "message": "Empty profile YAML"},
+                status_code=400,
+            )
+        if len(text) > 200_000:
+            return JSONResponse(
+                {"ok": False, "message": "Profile YAML too large"},
+                status_code=400,
+            )
+
+        try:
+            profile = load_profile_yaml(text)
+            # Also reject secrets that appear as YAML keys after parse
+            write_env_profile(profile, ROOT / ".env.profile")
+        except ValueError as exc:
+            return JSONResponse(
+                {"ok": False, "message": str(exc)},
+                status_code=400,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "message": str(exc)},
+                status_code=500,
+            )
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": (
+                    f"Imported profile {profile.name!r} "
+                    f"(dataset={profile.dataset}, models="
+                    f"{','.join(m.id for m in profile.models)}). "
+                    "Wrote .env.profile — API keys unchanged."
+                ),
+                "name": profile.name,
+                "dataset": profile.dataset,
+                "models": [m.id for m in profile.models],
             }
         )
 

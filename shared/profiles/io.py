@@ -14,6 +14,13 @@ def load_profile(path: Path) -> RunProfile:
     return profile_from_dict(data)
 
 
+def load_profile_yaml(text: str) -> RunProfile:
+    data = yaml.safe_load(text)
+    if not isinstance(data, dict):
+        raise ValueError("profile YAML must be a mapping/object")
+    return profile_from_dict(data)
+
+
 def save_profile(path: Path, profile: RunProfile) -> None:
     with path.open("w", encoding="utf-8") as profile_file:
         yaml.safe_dump(asdict(profile), profile_file, sort_keys=False)
