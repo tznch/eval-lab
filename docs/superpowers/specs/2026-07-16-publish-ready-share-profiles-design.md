@@ -5,7 +5,7 @@ Status: approved for planning
 
 ## Goal
 
-Prepare this repository for **public open-source** publication (MIT) and add a **lean MVP** for sharing eval setups: YAML profiles (run recipe + Hugging Face / GGUF model refs) with CLI export/import, plus a minimal dashboard button to download a model from a profile. Secrets stay local; no machine-specific hardware docs.
+Prepare this repository for **public open-source** publication (MIT) and add a **lean MVP** for sharing eval setups: YAML profiles (run recipe + Hugging Face / GGUF model refs) with CLI export/import, plus a minimal dashboard button to download a model from a profile. Also provide a simple **package sync** command to update eval tools (RAGAS, DeepEval, Promptfoo, and related Python deps). Secrets stay local; no machine-specific hardware docs.
 
 ## Non-goals
 
@@ -14,6 +14,7 @@ Prepare this repository for **public open-source** publication (MIT) and add a *
 - Dashboard UI to enter or store Hugging Face / API keys (keys remain in `.env` only)
 - Full profile editor / picker UX on the dashboard
 - Hardware recommendations or “this machine” setup sections in README
+- Git clone/submodule/`git pull` of upstream eval-tool repositories (tools stay package-managed)
 
 ## Decisions (locked)
 
@@ -25,6 +26,7 @@ Prepare this repository for **public open-source** publication (MIT) and add a *
 | Hardware docs | None — every user has different hardware |
 | Profile content | Run recipe **plus** HF/GGUF model refs (option B) |
 | Dashboard in this cycle | One **Download model (from profile)** action; HF token from `.env` only |
+| Eval tool updates | Package sync only (`uv pip` / `npm`) — not git pull of tool repos |
 | Approach | Lean public kit + YAML profiles + thin dashboard hook |
 
 ## 1. Publish-ready packaging
@@ -61,9 +63,20 @@ Author replaces `YOUR_NAME` before or after the first public push.
 
 ### 1.4 Git bootstrap
 
-- Repository is not yet a git repo: run `git init` when implementing.
-- First commit only after implementation plan execution (and when the user asks to commit).
+- Repository already has `git init` (design-spec root commit). Further commits follow implementation and user request.
 - Creating a GitHub remote / `gh repo create` is **out of band** until the user provides name/org.
+
+### 1.5 Eval tool updates (package sync)
+
+Users need a one-command way to refresh eval frameworks without managing upstream git checkouts.
+
+- Add `make tools-update` (and a thin script if useful) that:
+  1. Upgrades project Python deps in `.venv` with `uv pip install -U -e ".[dev]"` (or equivalent: upgrade `ragas`, `deepeval`, and other declared deps from `pyproject.toml`).
+  2. Upgrades Promptfoo via `npm install -g promptfoo@latest` (same channel as `make setup`).
+- Print installed versions after update (e.g. `python -c` / `promptfoo --version`) so users can record them alongside a shared profile.
+- Do **not** pin a lockfile in this cycle unless one already exists; document that `tools-update` moves to latest compatible releases and may change scores.
+- Optional: mention in README that for bit-exact reproduction, pin versions manually after a known-good run — full lockfile workflow is a later improvement.
+- Out of scope here: dashboard button for tools-update; separate git remotes for RAGAS/DeepEval/Promptfoo source trees.
 
 ## 2. Shareable run profiles
 
@@ -139,9 +152,10 @@ judge_model: tencent/hy3:free   # optional; id only, no API key
 | `.gitignore` / `LICENSE` / README / `pyproject.toml` | Public packaging |
 | `profiles/examples/*.yaml` | Canonical shareable recipes |
 | Profile load/validate/export module (under `shared/` or `scripts/`) | Schema + secret scrubbing |
-| Make targets + thin scripts | User-facing CLI |
+| Make targets + thin scripts | User-facing CLI (`profile-*`, `tools-update`) |
 | Dashboard route + button | Trigger download using profile + `.env` HF token |
 | Existing download scripts | Actual weight fetch |
+| `make tools-update` | Upgrade RAGAS / DeepEval / Promptfoo via packages |
 
 ## 5. Error handling
 
@@ -158,14 +172,15 @@ judge_model: tencent/hy3:free   # optional; id only, no API key
 
 ## 7. Documentation touchpoints
 
-- README: profiles section (export, import, share file, dashboard download).
+- README: profiles section (export, import, share file, dashboard download); `make tools-update` for eval frameworks.
 - `.env.example`: unchanged secret keys; optional comment that profiles never replace keys.
-- Short note in `docs/reproduce-run.md` that a shared profile is the preferred way to align dataset/temp/models.
+- Short note in `docs/reproduce-run.md` that a shared profile is the preferred way to align dataset/temp/models, and that tool versions come from package sync (record versions after `tools-update`).
 
 ## Success criteria
 
-1. After `git init` + ignore rules, secrets and large local artifacts are not candidates for commit.
+1. After ignore rules are applied, secrets and large local artifacts are not candidates for commit.
 2. A stranger can follow README without any host-specific hardware section.
 3. Author can export a profile, share the YAML; another clone can import it and run the same recipe with their own `.env`.
 4. Dashboard can start a model download for a profile model using HF token from `.env` only.
 5. MIT `LICENSE` present with editable `YOUR_NAME` placeholder.
+6. `make tools-update` upgrades Python eval deps and Promptfoo via packages and prints versions.
