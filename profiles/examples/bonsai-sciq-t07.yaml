@@ -1,0 +1,13 @@
+name: bonsai-sciq-t07
+dataset: sciq
+temperature: 0.7
+models:
+  - id: bonsai
+    hf_repo: prism-ml/Bonsai-27B-gguf
+    quant: Q1_0
+    gguf_hint: data/models/bonsai-27b-q1/
+limits:
+  promptfoo: 25
+  deepeval: 25
+  ragas: 25
+judge_model: tencent/hy3:free
