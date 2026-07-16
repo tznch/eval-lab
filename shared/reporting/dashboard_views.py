@@ -155,16 +155,16 @@ def _framework_track_row(fw_key: str, dataset: str, raw: dict | None) -> dict:
 def build_report_view(filters: FilterState, catalog: dict) -> dict:
     comparison = catalog.get("comparison") or {}
     runs_meta = comparison.get("runs") or []
-    all_labels = comparison.get("models") or []
     all_tracks = comparison.get("tracks") or []
     tracks = [t for t in all_tracks if filters.matches_dataset(t["dataset"])]
 
     runs = []
-    for meta, label in zip(runs_meta, all_labels):
+    for meta in runs_meta:
         model = meta["model"]
         temp_tag = meta["temp_tag"]
         if not filters.matches_run(model, temp_tag):
             continue
+        label = model_label(model, temp_tag.removeprefix("t"))
         frameworks = {}
         for fw in ("promptfoo", "deepeval", "ragas"):
             rows = []
@@ -189,7 +189,7 @@ def build_report_view(filters: FilterState, catalog: dict) -> dict:
     return {
         "runs": runs,
         "scope": catalog.get("scope") or {},
-        "track_count": len(tracks),
+        "track_count": len({t["dataset"] for t in tracks}),
         "generated_at": catalog.get("generated_at"),
     }
 

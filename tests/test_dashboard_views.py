@@ -157,3 +157,74 @@ def test_build_report_view_filters_runs_and_datasets():
     # Tabs always present even if framework filter would have dropped matrix tables before
     assert "deepeval" in view["runs"][0]["frameworks"]
     assert "ragas" in view["runs"][0]["frameworks"]
+
+
+def test_build_report_view_resolves_label_by_model_temp_not_position():
+    """Track lookup must use (model, temp_tag) identity, not zip order with models."""
+    catalog = {
+        "generated_at": "2026-01-01",
+        "comparison": {
+            # models order intentionally differs from runs order
+            "models": ["qwen27 (t0.2)", "bonsai (t0.2)"],
+            "runs": [
+                {"model": "bonsai", "temp_tag": "t0.2"},
+                {"model": "qwen27", "temp_tag": "t0.2"},
+            ],
+            "tracks": [
+                {
+                    "dataset": "sciq",
+                    "models": {
+                        "bonsai (t0.2)": {"promptfoo": {"pass": 5, "fail": 5, "total": 10, "pass_rate": 0.5}},
+                        "qwen27 (t0.2)": {"promptfoo": {"pass": 8, "fail": 2, "total": 10, "pass_rate": 0.8}},
+                    },
+                },
+            ],
+        },
+    }
+    filters = FilterState(
+        models=["bonsai"], temps=["t0.2"], dataset="all",
+        frameworks=["promptfoo"],
+    )
+    view = build_report_view(filters, catalog)
+    assert len(view["runs"]) == 1
+    pf = view["runs"][0]["frameworks"]["promptfoo"][0]
+    assert pf["missing"] is False
+    assert pf["pass"] == 5
+
+
+def test_build_report_view_track_count_unique_datasets():
+    """track_count counts unique datasets, not raw track list length."""
+    catalog = {
+        "generated_at": "2026-01-01",
+        "comparison": {
+            "models": ["bonsai (t0.2)"],
+            "runs": [{"model": "bonsai", "temp_tag": "t0.2"}],
+            "tracks": [
+                {
+                    "dataset": "sciq",
+                    "models": {
+                        "bonsai (t0.2)": {"promptfoo": {"pass": 5, "fail": 5, "total": 10, "pass_rate": 0.5}},
+                    },
+                },
+                {
+                    "dataset": "sciq",
+                    "models": {
+                        "bonsai (t0.2)": {"promptfoo": {"pass": 3, "fail": 7, "total": 10, "pass_rate": 0.3}},
+                    },
+                },
+                {
+                    "dataset": "uda_qa",
+                    "models": {
+                        "bonsai (t0.2)": {"promptfoo": {"pass": 1, "fail": 1, "total": 2, "pass_rate": 0.5}},
+                    },
+                },
+            ],
+        },
+    }
+    filters = FilterState(
+        models=["bonsai"], temps=["t0.2"], dataset="all",
+        frameworks=["promptfoo"],
+    )
+    view = build_report_view(filters, catalog)
+    assert view["track_count"] == 2
+    assert len(view["runs"][0]["frameworks"]["promptfoo"]) == 3
