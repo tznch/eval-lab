@@ -1,47 +1,31 @@
-/** Alpine + HTMX lab dashboard — two-tier nav, URL sync, filters. */
+/** Alpine + HTMX lab dashboard — flat destination nav, URL sync, filters. */
 function labApp() {
   const STORAGE_KEY = "llmLabFilters";
   const FILTERS_OPEN_KEY = "llmLabFiltersOpen";
-  const VIEW_MAP = {
-    overview: { primary: "overview", partial: "overview", sub: null },
-    report: { primary: "compare", partial: "report", sub: "report" },
-    performance: { primary: "compare", partial: "performance", sub: "performance" },
-    deepeval: { primary: "analyze", partial: "deepeval", sub: "deepeval" },
-    ragas: { primary: "analyze", partial: "ragas", sub: "ragas" },
-    failures: { primary: "analyze", partial: "failures", sub: "failures" },
-    promptfoo: { primary: "tools", partial: "promptfoo", sub: "ui" },
-    "promptfoo-ui": { primary: "tools", partial: "promptfoo", sub: "ui" },
-    "promptfoo-summaries": { primary: "tools", partial: "promptfoo", sub: "summaries" },
+  const KNOWN_VIEWS = new Set([
+    "overview",
+    "report",
+    "performance",
+    "deepeval",
+    "ragas",
+    "failures",
+    "promptfoo",
+  ]);
+  /** Legacy URL aliases → canonical view (+ optional panel). */
+  const LEGACY_VIEWS = {
+    "promptfoo-ui": { view: "promptfoo", panel: "ui" },
+    "promptfoo-summaries": { view: "promptfoo", panel: "summaries" },
+    compare: { view: "report" },
+    analyze: { view: "deepeval" },
+    tools: { view: "promptfoo" },
   };
 
   return {
-    primary: "overview",
-    sub: null,
+    view: "overview",
     contentPanel: null,
     catalog: null,
     filtersOpen: false,
     filters: { models: [], temps: [], dataset: "all", frameworks: [] },
-    primaryTabs: [
-      { id: "overview", label: "Overview" },
-      { id: "compare", label: "Compare" },
-      { id: "analyze", label: "Analyze" },
-      { id: "tools", label: "Tools" },
-    ],
-    subTabs: {
-      compare: [
-        { id: "report", label: "Report", partial: "report" },
-        { id: "performance", label: "Performance", partial: "performance" },
-      ],
-      analyze: [
-        { id: "deepeval", label: "DeepEval", partial: "deepeval" },
-        { id: "ragas", label: "RAGAS", partial: "ragas" },
-        { id: "failures", label: "Failures", partial: "failures" },
-      ],
-      tools: [
-        { id: "ui", label: "Promptfoo UI", partial: "promptfoo", panel: "ui" },
-        { id: "summaries", label: "Summaries", partial: "promptfoo", panel: "summaries" },
-      ],
-    },
 
     async init() {
       this.filtersOpen = localStorage.getItem(FILTERS_OPEN_KEY) === "1";
@@ -72,10 +56,6 @@ function labApp() {
         console.warn("catalog load failed", err);
       }
       this.reloadMain();
-    },
-
-    currentSubs() {
-      return this.subTabs[this.primary] || [];
     },
 
     defaultFilters() {
@@ -117,17 +97,8 @@ function labApp() {
       localStorage.setItem(FILTERS_OPEN_KEY, this.filtersOpen ? "1" : "0");
     },
 
-    viewKey() {
-      if (this.primary === "overview") return "overview";
-      if (this.primary === "tools") return this.sub === "summaries" ? "promptfoo-summaries" : "promptfoo-ui";
-      return this.sub || this.primary;
-    },
-
     partialName() {
-      if (this.primary === "overview") return "overview";
-      const subs = this.currentSubs();
-      const found = subs.find((s) => s.id === this.sub);
-      return found?.partial || "overview";
+      return KNOWN_VIEWS.has(this.view) ? this.view : "overview";
     },
 
     filterQuery() {
@@ -147,7 +118,7 @@ function labApp() {
 
     syncUrl() {
       const p = this.filterQuery();
-      p.set("view", this.viewKey());
+      p.set("view", this.view);
       if (this.contentPanel) p.set("panel", this.contentPanel);
       const qs = p.toString();
       const next = `${location.pathname}?${qs}`;
@@ -158,14 +129,18 @@ function labApp() {
 
     readUrl() {
       const p = new URLSearchParams(location.search);
-      const view = p.get("view") || "overview";
-      const mapped = VIEW_MAP[view] || VIEW_MAP.overview;
-      this.primary = mapped.primary;
-      this.sub = mapped.sub;
-      if (mapped.primary !== "overview" && !this.sub) {
-        this.sub = this.currentSubs()[0]?.id || null;
+      const raw = p.get("view") || "overview";
+      const legacy = LEGACY_VIEWS[raw];
+      if (legacy) {
+        this.view = legacy.view;
+        this.contentPanel = p.get("panel") || legacy.panel || null;
+      } else {
+        this.view = KNOWN_VIEWS.has(raw) ? raw : "overview";
+        this.contentPanel = p.get("panel") || null;
       }
-      this.contentPanel = p.get("panel") || null;
+      if (this.view === "promptfoo" && !this.contentPanel) {
+        this.contentPanel = "ui";
+      }
       if (p.has("models") || p.has("temps") || p.has("dataset") || p.has("frameworks")) {
         this._urlFilterParams = p;
       }
@@ -195,11 +170,9 @@ function labApp() {
       this.applyUrlFiltersIfAny();
       const partial = this.partialName();
       const p = this.filterQuery();
-      if (this.primary === "tools") {
-        p.set("panel", this.sub === "summaries" ? "summaries" : "ui");
-      } else if (this.contentPanel && this.primary === "compare" && this.sub === "report") {
-        p.set("panel", this.contentPanel);
-      } else if (this.contentPanel && this.primary === "compare" && this.sub === "performance") {
+      if (this.view === "promptfoo") {
+        p.set("panel", this.contentPanel === "summaries" ? "summaries" : "ui");
+      } else if (this.contentPanel && (this.view === "report" || this.view === "performance")) {
         p.set("panel", this.contentPanel);
       }
       const qs = p.toString();
@@ -212,28 +185,9 @@ function labApp() {
       htmx.ajax("GET", url, { target: "#main-content", swap: "innerHTML" });
     },
 
-    setPrimary(id) {
-      this.primary = id;
-      const subs = this.currentSubs();
-      this.sub = subs.length ? subs[0].id : null;
-      this.contentPanel = null;
-      this.reloadMain();
-    },
-
-    setSub(id) {
-      this.sub = id;
-      this.contentPanel = null;
-      this.reloadMain();
-    },
-
-    setTab(id) {
-      const mapped = VIEW_MAP[id] || VIEW_MAP.overview;
-      this.primary = mapped.primary;
-      this.sub = mapped.sub;
-      if (mapped.primary !== "overview" && !this.sub) {
-        this.sub = this.currentSubs()[0]?.id || null;
-      }
-      this.contentPanel = null;
+    setView(id) {
+      this.view = KNOWN_VIEWS.has(id) ? id : "overview";
+      this.contentPanel = this.view === "promptfoo" ? "ui" : null;
       this.reloadMain();
     },
 
@@ -281,6 +235,66 @@ function labApp() {
         status.textContent = data.path ? `${data.message}: ${data.path}` : data.message;
       } catch (error) {
         status.textContent = error instanceof Error ? error.message : "Download failed";
+      } finally {
+        button.disabled = false;
+      }
+    },
+
+    async exportProfileYaml(event) {
+      const button = event.currentTarget;
+      const status = document.getElementById("profile-action-status");
+      if (!status) return;
+
+      const temps = this.filters.temps || [];
+      let temperature = null;
+      if (temps.length === 1) {
+        const raw = String(temps[0]).replace(/^t/, "");
+        const parsed = Number.parseFloat(raw);
+        if (!Number.isNaN(parsed)) temperature = parsed;
+      }
+
+      const dataset =
+        this.filters.dataset && this.filters.dataset !== "all"
+          ? this.filters.dataset
+          : null;
+      const models =
+        this.filters.models && this.filters.models.length
+          ? this.filters.models.slice()
+          : null;
+
+      const stamp = new Date().toISOString().slice(0, 10);
+      const nameParts = [
+        dataset || "run",
+        (models && models[0]) || "model",
+        temperature != null ? `t${temperature}` : null,
+        stamp,
+      ].filter(Boolean);
+      const name = nameParts.join("-");
+
+      button.disabled = true;
+      status.textContent = "Exporting…";
+      try {
+        const response = await fetch("/api/profiles/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, dataset, temperature, models }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.message || "Export failed");
+        }
+        const blob = new Blob([data.yaml], { type: "text/yaml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = data.filename || `${name}.yaml`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        status.textContent = data.message || "Exported";
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Export failed";
       } finally {
         button.disabled = false;
       }

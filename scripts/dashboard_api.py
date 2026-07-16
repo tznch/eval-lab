@@ -10,9 +10,16 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from shared.env_files import load_project_env
 from shared.profiles import SECRET_KEYS
 from shared.profiles.download import download_profile_model
-from shared.profiles.io import load_profile, load_profile_yaml, write_env_profile
+from shared.profiles.io import (
+    export_profile_from_env,
+    load_profile,
+    load_profile_yaml,
+    profile_to_yaml,
+    write_env_profile,
+)
 from shared.reporting.dashboard_filters import parse_filter_params
 from shared.reporting.dashboard_views import (
     build_deepeval_groups,
@@ -67,6 +74,22 @@ class ProfileImportPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     yaml: str
+
+
+class ProfileExportPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    dataset: str | None = None
+    temperature: float | None = None
+    models: list[str] | None = None
+
+
+def _safe_profile_filename(name: str) -> str:
+    cleaned = "".join(
+        ch if ch.isalnum() or ch in "._-" else "-" for ch in name.strip()
+    ).strip("-._")
+    return (cleaned or "run-profile")[:80] + ".yaml"
 
 
 def create_app() -> FastAPI:
@@ -224,6 +247,73 @@ def create_app() -> FastAPI:
                     f"{','.join(m.id for m in profile.models)}). "
                     "Wrote .env.profile — API keys unchanged."
                 ),
+                "name": profile.name,
+                "dataset": profile.dataset,
+                "models": [m.id for m in profile.models],
+            }
+        )
+
+    @app.post("/api/profiles/export")
+    def api_profiles_export(payload: dict | None = Body(default=None)) -> JSONResponse:
+        payload = payload if isinstance(payload, dict) else {}
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Secret keys not allowed in body: "
+                        + ", ".join(bad_keys)
+                    ),
+                },
+                status_code=400,
+            )
+
+        try:
+            body = ProfileExportPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Invalid request body: name/dataset must be strings, "
+                        "temperature a number, models a list of strings"
+                    ),
+                },
+                status_code=400,
+            )
+
+        load_project_env()
+        name = (body.name or "").strip() or "run-profile"
+        try:
+            profile = export_profile_from_env(
+                name,
+                dataset=body.dataset,
+                temperature=body.temperature,
+                model_ids=body.models,
+            )
+            yaml_text = profile_to_yaml(profile)
+        except ValueError as exc:
+            return JSONResponse(
+                {"ok": False, "message": str(exc)},
+                status_code=400,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "message": str(exc)},
+                status_code=500,
+            )
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": (
+                    f"Exported profile {profile.name!r} "
+                    f"(dataset={profile.dataset}, models="
+                    f"{','.join(m.id for m in profile.models)})"
+                ),
+                "filename": _safe_profile_filename(profile.name),
+                "yaml": yaml_text,
                 "name": profile.name,
                 "dataset": profile.dataset,
                 "models": [m.id for m in profile.models],

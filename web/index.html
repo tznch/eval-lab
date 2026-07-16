@@ -11,7 +11,7 @@
   <script defer src="/static/app.js"></script>
   <script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
 </head>
-<body x-data="labApp()" x-init="init()" @switch-tab.window="setTab($event.detail)">
+<body x-data="labApp()" x-init="init()">
 <a class="skip-link" href="#main-content">Skip to content</a>
 
 <div class="site-sticky">
@@ -19,7 +19,7 @@
     <div class="site-header-inner">
       <div class="header-row">
         <div class="site-brand">
-          <a href="/?view=overview" @click.prevent="setPrimary('overview')">LLM Eval Lab</a>
+          <a href="?view=overview" @click.prevent="setView('overview')">LLM Eval Lab</a>
         </div>
         <div class="header-actions">
           <button type="button"
@@ -32,29 +32,42 @@
           <span class="ctrl-summary compact" x-show="catalog" x-text="filterSummary()"></span>
         </div>
       </div>
-      <nav class="tabs" role="tablist" aria-label="Primary">
-        <template x-for="t in primaryTabs" :key="t.id">
-          <button type="button"
-                  role="tab"
-                  class="tab-btn"
-                  :class="primary === t.id && 'active'"
-                  :aria-selected="(primary === t.id).toString()"
-                  :tabindex="primary === t.id ? 0 : -1"
-                  @click="setPrimary(t.id)"
-                  x-text="t.label"></button>
-        </template>
-      </nav>
-      <nav class="sub-tabs" role="tablist" aria-label="Secondary" x-show="currentSubs().length" x-cloak>
-        <template x-for="s in currentSubs()" :key="s.id">
-          <button type="button"
-                  role="tab"
-                  class="sub-tab-btn"
-                  :class="sub === s.id && 'active'"
-                  :aria-selected="(sub === s.id).toString()"
-                  :tabindex="sub === s.id ? 0 : -1"
-                  @click="setSub(s.id)"
-                  x-text="s.label"></button>
-        </template>
+      <nav class="tabs" aria-label="Views">
+        <a href="?view=overview"
+           class="tab-btn"
+           :class="view === 'overview' && 'active'"
+           :aria-current="view === 'overview' ? 'page' : null"
+           @click.prevent="setView('overview')">Overview</a>
+        <a href="?view=report"
+           class="tab-btn"
+           :class="view === 'report' && 'active'"
+           :aria-current="view === 'report' ? 'page' : null"
+           @click.prevent="setView('report')">Report</a>
+        <a href="?view=performance"
+           class="tab-btn"
+           :class="view === 'performance' && 'active'"
+           :aria-current="view === 'performance' ? 'page' : null"
+           @click.prevent="setView('performance')">Performance</a>
+        <a href="?view=deepeval"
+           class="tab-btn"
+           :class="view === 'deepeval' && 'active'"
+           :aria-current="view === 'deepeval' ? 'page' : null"
+           @click.prevent="setView('deepeval')">DeepEval</a>
+        <a href="?view=ragas"
+           class="tab-btn"
+           :class="view === 'ragas' && 'active'"
+           :aria-current="view === 'ragas' ? 'page' : null"
+           @click.prevent="setView('ragas')">RAGAS</a>
+        <a href="?view=failures"
+           class="tab-btn"
+           :class="view === 'failures' && 'active'"
+           :aria-current="view === 'failures' ? 'page' : null"
+           @click.prevent="setView('failures')">Failures</a>
+        <a href="?view=promptfoo"
+           class="tab-btn"
+           :class="view === 'promptfoo' && 'active'"
+           :aria-current="view === 'promptfoo' ? 'page' : null"
+           @click.prevent="setView('promptfoo')">Promptfoo</a>
       </nav>
     </div>
   </header>

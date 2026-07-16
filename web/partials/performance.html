@@ -8,7 +8,6 @@
 {% if view.empty %}
 <p class="empty">No performance data for current filters — run <code>make portfolio MODEL=bonsai</code> first.</p>
 {% else %}
-{% set fq = filters.to_query() %}
 {% set labels = {
   'specs': 'Model specs',
   'rollup': 'Portfolio rollup',
@@ -18,15 +17,11 @@
 {% set active = panel if panel in view.by_key else 'specs' %}
 {% set table = view.by_key[active] %}
 
-<nav class="panel-tabs" role="tablist" aria-label="Performance tables">
+<nav class="panel-seg" aria-label="Performance tables">
   {% for key, label in labels.items() %}
-  <button type="button"
-          class="sub-tab-btn {{ 'active' if key == active else '' }}"
-          role="tab"
-          aria-selected="{{ 'true' if key == active else 'false' }}"
-          hx-get="/partials/performance?{{ fq }}{% if fq %}&{% endif %}panel={{ key }}"
-          hx-target="#main-content"
-          hx-swap="innerHTML">{{ label }}</button>
+  <a class="panel-seg-btn {{ 'active' if key == active else '' }}"
+     href="?view=performance&amp;panel={{ key }}"
+     @click.prevent="contentPanel = '{{ key }}'; reloadMain()">{{ label }}</a>
   {% endfor %}
 </nav>
 

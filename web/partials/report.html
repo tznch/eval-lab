@@ -1,5 +1,4 @@
 {% if view.tables %}
-{% set fq = filters.to_query() %}
 {% set frameworks = view.tables | map(attribute='framework') | list %}
 {% set active = panel if panel in frameworks else frameworks[0] %}
 {% set scope = view.scope or {} %}
@@ -13,16 +12,11 @@
   {% endif %}
 </p>
 
-<nav class="panel-tabs" role="tablist" aria-label="Report frameworks">
+<nav class="panel-seg" aria-label="Report frameworks">
   {% for table in view.tables %}
-  <button type="button"
-          class="sub-tab-btn {{ 'active' if table.framework == active else '' }}"
-          role="tab"
-          aria-selected="{{ 'true' if table.framework == active else 'false' }}"
-          hx-get="/partials/report?{{ fq }}{% if fq %}&{% endif %}panel={{ table.framework }}"
-          hx-target="#main-content"
-          hx-swap="innerHTML"
-          hx-push-url="true">{{ table.short_title or table.framework }}</button>
+  <a class="panel-seg-btn {{ 'active' if table.framework == active else '' }}"
+     href="?view=report&amp;panel={{ table.framework }}"
+     @click.prevent="contentPanel = '{{ table.framework }}'; reloadMain()">{{ table.short_title or table.framework }}</a>
   {% endfor %}
 </nav>
 

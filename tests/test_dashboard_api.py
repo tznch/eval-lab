@@ -27,6 +27,31 @@ def test_index():
     assert r.status_code == 200
 
 
+def test_index_flat_destination_nav():
+    """Shell exposes one flat row of destination links (no secondary tablist)."""
+    client = TestClient(create_app())
+    r = client.get("/")
+    assert r.status_code == 200
+    html = r.text
+    assert 'aria-label="Secondary"' not in html
+    assert "sub-tabs" not in html
+    for label in (
+        "Overview",
+        "Report",
+        "Performance",
+        "DeepEval",
+        "RAGAS",
+        "Failures",
+        "Promptfoo",
+    ):
+        assert label in html
+    assert 'href="?view=overview"' in html or 'href="?view=overview"' in html
+    assert 'href="?view=report"' in html
+    assert 'href="?view=promptfoo"' in html
+    assert 'aria-label="Views"' in html
+    assert 'role="tablist"' not in html
+
+
 def test_catalog_json():
     client = TestClient(create_app())
     r = client.get("/api/catalog")
@@ -41,6 +66,33 @@ def test_overview_partial():
     r = client.get("/partials/overview")
     assert r.status_code == 200
     assert "Framework runs" in r.text or "Eval progress" in r.text
+
+
+def test_overview_uses_view_links_and_setup():
+    client = TestClient(create_app())
+    r = client.get("/partials/overview")
+    assert r.status_code == 200
+    html = r.text
+    assert 'href="?view=promptfoo"' in html
+    assert 'href="?view=deepeval"' in html
+    assert 'href="?view=ragas"' in html
+    assert 'href="?view=performance"' in html
+    assert 'href="?view=report"' in html
+    assert 'href="?view=failures"' in html
+    assert "switch-tab" not in html
+    assert "Setup" in html
+    assert "Import profile YAML" in html
+
+
+def test_promptfoo_partial_has_in_page_panels():
+    client = TestClient(create_app())
+    r = client.get("/partials/promptfoo")
+    assert r.status_code == 200
+    html = r.text
+    assert "panel-seg" in html or 'aria-label="Promptfoo panels"' in html
+    assert "Interactive UI" in html or "Summaries" in html
+    assert "panel=summaries" in html
+    assert "panel=ui" in html
 
 
 def test_report_partial():
@@ -90,9 +142,10 @@ def test_promptfoo_panel_summaries():
     client = TestClient(create_app())
     r = client.get("/partials/promptfoo?panel=summaries")
     assert r.status_code == 200
-    assert "Interactive UI" not in r.text
     assert "<iframe" not in r.text.lower()
     assert "output.json" in r.text or "No Promptfoo" in r.text
+    assert 'panel-seg-btn active' in r.text
+    assert 'panel=summaries' in r.text
 
 
 def test_report_panel():
@@ -260,3 +313,59 @@ def test_import_profile_rejects_invalid_yaml():
     r = client.post("/api/profiles/import", json={"yaml": "- just a list\n"})
     assert r.status_code == 400
     assert r.json()["ok"] is False
+
+
+def test_export_profile_returns_yaml(monkeypatch):
+    monkeypatch.setenv("EVAL_DATASET", "sciq")
+    monkeypatch.setenv("TARGET_TEMPERATURE", "0.7")
+    monkeypatch.setenv("MODEL", "bonsai")
+    monkeypatch.setenv("PROMPTFOO_LIMIT", "10")
+    monkeypatch.setenv("DEEPEVAL_LIMIT", "5")
+    monkeypatch.setenv("RAGAS_LIMIT", "5")
+    client = TestClient(create_app())
+    r = client.post("/api/profiles/export", json={"name": "ui-export"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["filename"] == "ui-export.yaml"
+    assert "dataset: sciq" in body["yaml"]
+    assert "id: bonsai" in body["yaml"]
+    assert "OPENROUTER" not in body["yaml"]
+    assert "HF_TOKEN" not in body["yaml"]
+
+
+def test_export_profile_applies_filter_overrides(monkeypatch):
+    monkeypatch.setenv("EVAL_DATASET", "sciq")
+    monkeypatch.setenv("MODEL", "bonsai")
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/profiles/export",
+        json={
+            "name": "filtered",
+            "dataset": "uda_qa",
+            "temperature": 0.2,
+            "models": ["bonsai"],
+        },
+    )
+    assert r.status_code == 200
+    yaml_text = r.json()["yaml"]
+    assert "dataset: uda_qa" in yaml_text
+    assert "temperature: 0.2" in yaml_text
+
+
+def test_export_profile_rejects_secret_keys():
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/profiles/export",
+        json={"name": "x", "HF_TOKEN": "nope"},
+    )
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+
+
+def test_overview_has_export_profile_button():
+    client = TestClient(create_app())
+    r = client.get("/partials/overview")
+    assert r.status_code == 200
+    assert "Export profile YAML" in r.text
+    assert "exportProfile" in r.text or "exportProfileYaml" in r.text

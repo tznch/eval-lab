@@ -2,6 +2,15 @@
 
 {% set panel = panel or 'ui' %}
 
+<nav class="panel-seg" aria-label="Promptfoo panels">
+  <a class="panel-seg-btn {{ 'active' if panel == 'ui' else '' }}"
+     href="?view=promptfoo&amp;panel=ui"
+     @click.prevent="contentPanel = 'ui'; reloadMain()">Interactive UI</a>
+  <a class="panel-seg-btn {{ 'active' if panel == 'summaries' else '' }}"
+     href="?view=promptfoo&amp;panel=summaries"
+     @click.prevent="contentPanel = 'summaries'; reloadMain()">Summaries</a>
+</nav>
+
 {% if panel == 'ui' %}
 <section class="card wide">
   <h3>Interactive UI</h3>

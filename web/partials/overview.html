@@ -1,4 +1,4 @@
-<p class="meta">Live dashboard · filters apply to all tabs</p>
+<p class="meta">Live dashboard · filters apply to all views</p>
 
 <section class="card wide">
   <h3>Eval progress</h3>
@@ -15,47 +15,57 @@
   <div class="card">
     <h3>Promptfoo</h3>
     <p class="meta">{{ view.runs.promptfoo }} run(s)</p>
-    <button class="btn" type="button" @click="$dispatch('switch-tab', 'promptfoo')">Promptfoo →</button>
+    <a class="btn" href="?view=promptfoo" @click.prevent="setView('promptfoo')">Promptfoo →</a>
   </div>
   <div class="card">
     <h3>DeepEval</h3>
     <p class="meta">{{ view.runs.deepeval }} run(s)</p>
-    <button class="btn" type="button" @click="$dispatch('switch-tab', 'deepeval')">DeepEval →</button>
+    <a class="btn" href="?view=deepeval" @click.prevent="setView('deepeval')">DeepEval →</a>
   </div>
   <div class="card">
     <h3>RAGAS</h3>
     <p class="meta">{{ view.runs.ragas }} run(s)</p>
-    <button class="btn" type="button" @click="$dispatch('switch-tab', 'ragas')">RAGAS →</button>
+    <a class="btn" href="?view=ragas" @click.prevent="setView('ragas')">RAGAS →</a>
   </div>
   <div class="card">
     <h3>Performance</h3>
     <p class="meta">Latency · RAM · tok/s</p>
-    <button class="btn" type="button" @click="$dispatch('switch-tab', 'performance')">Performance →</button>
+    <a class="btn" href="?view=performance" @click.prevent="setView('performance')">Performance →</a>
   </div>
 </div>
 
 <p class="meta action-row">
-  <button class="btn secondary" type="button" @click="$dispatch('switch-tab', 'report')">Combined report →</button>
-  <button class="btn secondary" type="button" @click="$dispatch('switch-tab', 'failures')">Failure analysis →</button>
+  <a class="btn secondary" href="?view=report" @click.prevent="setView('report')">Combined report →</a>
+  <a class="btn secondary" href="?view=failures" @click.prevent="setView('failures')">Failure analysis →</a>
   <a class="btn secondary" href="/exports/combined_report.json" download>JSON export</a>
 </p>
 
-<p class="meta action-row" id="profile-actions-row">
-  <label class="btn secondary" for="profile-import-file">
-    Import profile YAML
-    <input id="profile-import-file"
-           type="file"
-           accept=".yaml,.yml,text/yaml,text/x-yaml,application/x-yaml"
-           hidden
-           @change="importProfileFile($event)">
-  </label>
-  <button class="btn secondary"
-          type="button"
-          id="btn-download-profile-model"
-          data-profile="profiles/examples/bonsai-sciq-t07.yaml"
-          data-model-id="bonsai"
-          @click="downloadProfileModel($event)">
-    Download model (example profile)
-  </button>
-  <span id="profile-action-status" class="meta" aria-live="polite"></span>
-</p>
+<section class="card wide setup-card" id="profile-actions-row">
+  <h3>Setup</h3>
+  <p class="meta">Share a run recipe (dataset, models, temperature, limits) — no API keys.</p>
+  <p class="meta action-row">
+    <button class="btn secondary"
+            type="button"
+            id="btn-export-profile"
+            @click="exportProfileYaml($event)">
+      Export profile YAML
+    </button>
+    <label class="btn secondary" for="profile-import-file">
+      Import profile YAML
+      <input id="profile-import-file"
+             type="file"
+             accept=".yaml,.yml,text/yaml,text/x-yaml,application/x-yaml"
+             hidden
+             @change="importProfileFile($event)">
+    </label>
+    <button class="btn secondary"
+            type="button"
+            id="btn-download-profile-model"
+            data-profile="profiles/examples/bonsai-sciq-t07.yaml"
+            data-model-id="bonsai"
+            @click="downloadProfileModel($event)">
+      Download model (example profile)
+    </button>
+    <span id="profile-action-status" class="meta" aria-live="polite"></span>
+  </p>
+</section>

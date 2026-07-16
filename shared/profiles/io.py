@@ -22,8 +22,14 @@ def load_profile_yaml(text: str) -> RunProfile:
 
 
 def save_profile(path: Path, profile: RunProfile) -> None:
-    with path.open("w", encoding="utf-8") as profile_file:
-        yaml.safe_dump(asdict(profile), profile_file, sort_keys=False)
+    path.write_text(profile_to_yaml(profile), encoding="utf-8")
+
+
+def profile_to_yaml(profile: RunProfile) -> str:
+    data = asdict(profile)
+    if data.get("judge_model") is None:
+        del data["judge_model"]
+    return yaml.safe_dump(data, sort_keys=False)
 
 
 def _model_ids_from_env() -> list[str]:
@@ -31,15 +37,28 @@ def _model_ids_from_env() -> list[str]:
     return [model_id.strip() for model_id in value.split(",") if model_id.strip()]
 
 
-def export_profile_from_env(name: str) -> RunProfile:
+def export_profile_from_env(
+    name: str,
+    *,
+    dataset: str | None = None,
+    temperature: float | None = None,
+    model_ids: list[str] | None = None,
+) -> RunProfile:
+    ids = model_ids if model_ids is not None else _model_ids_from_env()
+    if not ids:
+        raise ValueError("at least one model id is required")
     models = []
-    for model_id in _model_ids_from_env():
+    for model_id in ids:
         models.append({"id": model_id, **MODEL_REGISTRY.get(model_id, {})})
 
     data = {
         "name": name,
-        "dataset": os.getenv("EVAL_DATASET", "uda_qa"),
-        "temperature": float(os.getenv("TARGET_TEMPERATURE", "0.7")),
+        "dataset": dataset if dataset is not None else os.getenv("EVAL_DATASET", "uda_qa"),
+        "temperature": (
+            float(temperature)
+            if temperature is not None
+            else float(os.getenv("TARGET_TEMPERATURE", "0.7"))
+        ),
         "models": models,
         "limits": {
             "promptfoo": int(os.getenv("PROMPTFOO_LIMIT", "25")),
