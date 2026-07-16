@@ -18,6 +18,11 @@ results/
 .playwright-mcp/
 .superpowers/
 
+# Generated Promptfoo artifacts (regenerate via make promptfoo-tests)
+eval/promptfoo/tests/generated.yaml
+eval/promptfoo/promptfooconfig.resolved.yaml
+eval/promptfoo/prompts/*.resolved.txt
+
 # Data & weights
 data/raw/
 data/processed/

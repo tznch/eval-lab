@@ -1,0 +1,18 @@
+id: ecommerce_faq
+name: E-Commerce FAQs
+task_type: faq
+topic: Retail / delivery & orders FAQ
+description: Real e-commerce FAQ pairs with policy text as RAG context.
+hf_id: NebulaByte/E-Commerce_FAQs
+task_prompt: Answer the customer FAQ using the policy context.
+
+source:
+  type: legacy
+  legacy: ecommerce_faq
+
+eval:
+  prompt: qa
+  portfolio: true
+
+limits:
+  default: 50

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>LLM Eval Lab</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <!-- app.js must load before Alpine so labApp() exists when x-data evaluates -->
+  <script defer src="/static/app.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js"></script>
+</head>
+<body x-data="labApp()" x-init="init()" @switch-tab.window="setTab($event.detail)">
+<a class="skip-link" href="#main-content">Skip to content</a>
+
+<div class="site-sticky">
+  <header class="site-header">
+    <div class="site-header-inner">
+      <div class="header-row">
+        <div class="site-brand">
+          <a href="/?view=overview" @click.prevent="setPrimary('overview')">LLM Eval Lab</a>
+        </div>
+        <div class="header-actions">
+          <button type="button"
+                  class="ctrl-btn"
+                  :aria-expanded="filtersOpen.toString()"
+                  aria-controls="lab-controls"
+                  @click="toggleFilters()">
+            <span x-text="filtersOpen ? 'Hide filters' : 'Filters'"></span>
+          </button>
+          <span class="ctrl-summary compact" x-show="catalog" x-text="filterSummary()"></span>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Primary">
+        <template x-for="t in primaryTabs" :key="t.id">
+          <button type="button"
+                  role="tab"
+                  class="tab-btn"
+                  :class="primary === t.id && 'active'"
+                  :aria-selected="(primary === t.id).toString()"
+                  :tabindex="primary === t.id ? 0 : -1"
+                  @click="setPrimary(t.id)"
+                  x-text="t.label"></button>
+        </template>
+      </nav>
+      <nav class="sub-tabs" role="tablist" aria-label="Secondary" x-show="currentSubs().length" x-cloak>
+        <template x-for="s in currentSubs()" :key="s.id">
+          <button type="button"
+                  role="tab"
+                  class="sub-tab-btn"
+                  :class="sub === s.id && 'active'"
+                  :aria-selected="(sub === s.id).toString()"
+                  :tabindex="sub === s.id ? 0 : -1"
+                  @click="setSub(s.id)"
+                  x-text="s.label"></button>
+        </template>
+      </nav>
+    </div>
+  </header>
+
+  <div class="lab-controls" id="lab-controls" x-show="filtersOpen" x-cloak>
+    <div class="lab-controls-inner" x-show="catalog">
+      <div class="ctrl-row">
+        <span class="ctrl-label" id="lbl-model">Model</span>
+        <div class="pill-group" role="group" aria-labelledby="lbl-model">
+          <template x-for="m in (catalog?.models || [])" :key="m">
+            <button type="button" class="pill" :class="filters.models.includes(m) && 'active'"
+                    :aria-pressed="filters.models.includes(m).toString()"
+                    @click="toggle('models', m)" x-text="m"></button>
+          </template>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label" id="lbl-temp">Temp</span>
+        <div class="pill-group" role="group" aria-labelledby="lbl-temp">
+          <template x-for="t in (catalog?.temps || [])" :key="t">
+            <button type="button" class="pill" :class="filters.temps.includes(t) && 'active'"
+                    :aria-pressed="filters.temps.includes(t).toString()"
+                    @click="toggle('temps', t)" x-text="t.replace(/^t/, 't=')"></button>
+          </template>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label" for="ctrl-dataset">Track</label>
+        <select id="ctrl-dataset" class="ctrl-select" x-model="filters.dataset" @change="saveAndReload()">
+          <option value="all">All tracks</option>
+          <template x-for="d in (catalog?.datasets || [])" :key="d">
+            <option :value="d" x-text="d"></option>
+          </template>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label" id="lbl-fw">Framework</span>
+        <div class="pill-group" role="group" aria-labelledby="lbl-fw">
+          <template x-for="f in (catalog?.frameworks || [])" :key="f">
+            <button type="button" class="pill" :class="filters.frameworks.includes(f) && 'active'"
+                    :aria-pressed="filters.frameworks.includes(f).toString()"
+                    @click="toggle('frameworks', f)" x-text="f"></button>
+          </template>
+        </div>
+      </div>
+      <div class="ctrl-actions">
+        <button type="button" class="ctrl-btn" @click="resetFilters()">Reset</button>
+      </div>
+    </div>
+    <div class="lab-controls-inner" x-show="!catalog">
+      <span class="ctrl-summary">Loading filters…</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <main id="main-content" tabindex="-1">
+    Loading…
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+id: sciq
+name: SciQ
+task_type: extractive_qa
+topic: Science QA with evidence
+description: Middle-school science questions with supporting paragraph and short answer.
+hf_id: allenai/sciq
+task_prompt: Given a science passage (context), answer the question concisely using only that evidence.
+
+source:
+  type: legacy
+  legacy: sciq
+
+eval:
+  prompt: qa
+  portfolio: true
+
+limits:
+  default: 100

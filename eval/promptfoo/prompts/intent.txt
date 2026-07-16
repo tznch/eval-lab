@@ -1,0 +1,6 @@
+Classify the user message into exactly one support intent label.
+
+User message:
+{{question}}
+
+Reply with only the snake_case intent label (e.g. cancel_order, add_product, track_order). No explanation.

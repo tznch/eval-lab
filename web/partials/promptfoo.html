@@ -1,0 +1,60 @@
+{% with guide=view.guide %}{% include "_guide.html" %}{% endwith %}
+
+{% set panel = panel or 'ui' %}
+
+{% if panel == 'ui' %}
+<section class="card wide">
+  <h3>Interactive UI</h3>
+  <p class="meta">Embedded from <code>{{ view.promptfoo_url }}</code> — start with <code>make dashboard-serve</code>.</p>
+  <iframe class="embed-frame" src="{{ view.promptfoo_url }}" title="Promptfoo interactive UI" loading="lazy"></iframe>
+  <p class="embed-note">If the frame is blank, Promptfoo is not running on that port.</p>
+</section>
+{% else %}
+{% if view.runs %}
+<section class="card wide">
+  <p class="meta">Static pass/fail rollup from <code>output.json</code> files · {{ view.runs|length }} run(s).</p>
+  <div class="table-scroll">
+    <table class="compare-table sticky-head summary-table">
+      <thead>
+        <tr>
+          <th>Track</th>
+          <th>Run</th>
+          <th>Pass</th>
+          <th>Fail</th>
+          <th>Err</th>
+          <th>Total</th>
+          <th>Pass rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in view.runs %}
+        {% for r in run.rows %}
+        <tr>
+          <td class="track"><span class="tag">{{ run.dataset }}</span></td>
+          <td class="run-cell">{{ run.model }} · {{ run.temp_tag.replace('t', 't=') }}</td>
+          <td class="pass">{{ r.pass }}</td>
+          <td class="{{ 'fail' if r.fail else 'muted-zero' }}">{{ r.fail }}</td>
+          <td class="{{ 'fail' if r.error else 'muted-zero' }}">{{ r.error }}</td>
+          <td>{{ r.total }}</td>
+          <td>
+            <div class="rate-cell">
+              <span class="rate-val">{{ r.rate }}</span>
+              {% if r.rate_val is not none %}
+              <span class="rate-bar" aria-hidden="true">
+                <span class="rate-bar-fill {{ 'low' if r.rate_val < 60 else ('mid' if r.rate_val < 85 else '') }}"
+                      style="width: {{ r.rate_val }}%"></span>
+              </span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<p class="empty">No Promptfoo results for current filters.</p>
+{% endif %}
+{% endif %}

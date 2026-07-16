@@ -1,0 +1,91 @@
+{% with guide=view.guide %}{% include "_guide.html" %}{% endwith %}
+
+<p class="meta">
+  Export stratified data:
+  <a href="/exports/failure_stratification.json" download>failure_stratification.json</a>
+</p>
+
+<details class="card wide accordion-card">
+  <summary><strong>Methodology</strong></summary>
+  <div class="accordion-body">
+    <ul class="guide-list">
+      <li><strong>Complexity tiers:</strong> {{ view.methodology.get('complexity_tiers', '—') }}</li>
+      <li><strong>Context buckets:</strong> {{ view.methodology.get('context_buckets', '—') }}</li>
+      <li><strong>RAGAS pass rule:</strong> {{ view.methodology.get('ragas_pass_rule', '—') }}</li>
+    </ul>
+    <h3>Failure modes</h3>
+    <ul class="guide-list">
+      {% for key, desc in (view.methodology.get('failure_modes') or {}).items() %}
+      <li><strong>{{ key }}</strong> — {{ desc }}</li>
+      {% else %}
+      <li>Run portfolio evals to populate.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</details>
+
+<h2>Portfolio tracks</h2>
+{% if view.tracks %}
+{% for track in view.tracks %}
+<details class="card wide accordion-card" {% if loop.first %}open{% endif %}>
+  <summary>
+    <span class="run-group-header">
+      <strong>{{ track.name }}</strong>
+      <span class="tag">{{ track.model }}</span>
+      <span class="meta">{{ track.topic }} · n={{ track.sample_count }}</span>
+    </span>
+  </summary>
+  <div class="accordion-body">
+    <table class="data-table">
+      <thead>
+        <tr><th>Framework</th><th>Pass</th><th>Fail</th><th>Rate</th></tr>
+      </thead>
+      <tbody>
+        {% for fw in track.by_framework %}
+        <tr>
+          <td>{{ fw.framework }}</td>
+          <td>{{ fw.pass }}</td>
+          <td class="fail">{{ fw.fail }}</td>
+          <td>{{ fw.rate }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No results</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <details class="nested-details">
+      <summary>Strata &amp; failure modes</summary>
+      <div class="strata-grid">
+        {% for title, rows in [
+          ('By complexity', track.by_complexity),
+          ('By context length', track.by_context_bucket),
+          ('By category', track.by_category),
+          ('Failure modes', track.failure_modes),
+        ] %}
+        <div>
+          <h4>{{ title }}</h4>
+          <table class="data-table compact">
+            <tr><th>Bucket</th><th>Pass</th><th>Fail</th><th>Rate</th></tr>
+            {% for row in rows %}
+            <tr><td>{{ row.label }}</td><td>{{ row.pass }}</td><td>{{ row.fail }}</td><td>{{ row.rate }}</td></tr>
+            {% else %}
+            <tr><td colspan="4">—</td></tr>
+            {% endfor %}
+          </table>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% if track.failed_samples %}
+    <ul class="guide-list" style="margin-top:1rem">
+      {% for item in track.failed_samples %}
+      <li><code>{{ item.sample_id }}</code> · {{ item.complexity }} · {{ item.context_bucket }} · {{ item.frameworks }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</details>
+{% endfor %}
+{% else %}
+<p class="empty">No failure data for current filters. Run <code>make portfolio MODEL=bonsai</code>.</p>
+{% endif %}

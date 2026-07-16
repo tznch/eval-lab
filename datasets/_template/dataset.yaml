@@ -1,0 +1,24 @@
+id: my_task
+name: My Custom Task
+task_type: extractive_qa   # extractive_qa | faq | intent
+topic: Custom domain
+description: Short description for dashboard export.
+hf_id: —
+task_prompt: Answer from provided context.
+
+source:
+  type: csv                 # csv | jsonl | samples | legacy
+  path: raw/*               # glob under this dataset folder
+  mapping:
+    id: id                  # optional — auto-generated if missing
+    question: question
+    ground_truth: answer
+    context: context
+    category: category
+
+eval:
+  prompt: qa                # qa | faq | intent
+  portfolio: false
+
+limits:
+  default: 50
