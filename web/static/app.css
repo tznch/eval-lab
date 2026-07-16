@@ -148,6 +148,10 @@ code { font-size: .85em; }
 .run-group-header {
   display: inline-flex; align-items: baseline; gap: .75rem; flex-wrap: wrap;
 }
+.run-card .run-group-header {
+  display: flex; align-items: center; width: 100%; margin-bottom: .35rem;
+}
+.run-card .run-group-header .btn { margin-left: auto; }
 .run-group-header h3, .run-group-header strong { margin: 0; font-size: 1.05rem; }
 .compare-table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: .5rem; }
 .compare-table th, .compare-table td {

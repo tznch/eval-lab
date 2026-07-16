@@ -338,7 +338,7 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request,
             "report.html",
-            {"view": view, "filters": filters, "panel": _panel(request)},
+            {"view": view, "filters": filters},
         )
 
     @app.get("/partials/deepeval", response_class=HTMLResponse)
