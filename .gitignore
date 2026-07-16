@@ -1,0 +1,44 @@
+# Secrets
+.env
+.env.profile
+
+# Python / tooling
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+
+# Eval / agent caches
+results/
+.promptfoo/
+.deepeval/
+.playwright-mcp/
+.superpowers/
+
+# Data & weights
+data/raw/
+data/processed/
+data/models/
+*.gguf
+
+# Generated samples (manifests stay tracked)
+datasets/*/samples.jsonl
+
+# Local profiles (examples/ stay tracked)
+profiles/*
+!profiles/examples/
+!profiles/examples/**
+
+# Root clutter
+bitext-retail-*.csv
+/*.png
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+node_modules/
