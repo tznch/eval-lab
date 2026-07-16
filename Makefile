@@ -1,6 +1,7 @@
 .PHONY: setup download download-sciq download-bonsai download-qwen27 download-qwen36q4 download-realworld prepare prepare-sciq prepare-portfolio prepare-dataset datasets-list clean-results stop-servers promptfoo-tests server server-bonsai server-qwen27 smoke-judge smoke-target smoke-bonsai eval-promptfoo eval-promptfoo-ifeval eval-deepeval eval-ragas eval-all lab lab-portfolio portfolio portfolio-qwen27 dashboard export-report dashboard-serve profile-export profile-import tools-update
 
 VENV := .venv/bin
+# Default sample dataset id; override with EVAL_DATASET=<id> from `make datasets-list`
 EVAL_DATASET ?= sciq
 
 setup:

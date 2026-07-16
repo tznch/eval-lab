@@ -2,14 +2,13 @@
 # One command: start model servers → run all evals → build & serve dashboard.
 #
 # Usage:
-#   ./scripts/run_lab.sh
-#   ./scripts/run_lab.sh --model bonsai
-#   EVAL_DATASET=sciq PROMPTFOO_LIMIT=30 DEEPEVAL_LIMIT=30 RAGAS_LIMIT=30 ./scripts/run_lab.sh --model bonsai
-#   MODEL=gemma ./scripts/run_lab.sh
+#   EVAL_DATASET=<dataset_id> ./scripts/run_lab.sh --model <model_id>
+#   PROMPTFOO_LIMIT=5 DEEPEVAL_LIMIT=3 RAGAS_LIMIT=5 \
+#     EVAL_DATASET=<dataset_id> ./scripts/run_lab.sh --model <model_id>
 #
 # Opens:
-#   http://127.0.0.1:3100/index.html     — home (framework buttons)
-#   http://127.0.0.1:15500/              — promptfoo full interactive UI
+#   http://127.0.0.1:3100/   — dashboard
+#   http://127.0.0.1:15500/  — promptfoo UI (if started)
 
 set -euo pipefail
 

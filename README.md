@@ -1,206 +1,135 @@
 # LLM Testing Lab
 
-Practice LLM evaluation with **RAGAS**, **DeepEval**, and **Promptfoo** on [SciQ](https://huggingface.co/datasets/allenai/sciq) (showcase) and [UDA-QA](https://huggingface.co/datasets/qinchuanhui/UDA-QA) (hard RAG).
+Run the same eval suite — **Promptfoo**, **DeepEval**, and **RAGAS** — against any local OpenAI-compatible target and any dataset registered in this repo.
 
 ## Stack
 
-| Role | Tool |
-|------|------|
-| Target model | Gemma-4 / Bonsai-27B Q1 via `llama-server` (CPU) |
-| Judge | **OpenRouter** (`tencent/hy3:free` default) or GLM API (Z.ai) |
-| Dataset | **SciQ** (default showcase) · UDA-QA (`feta`, `nq`) · IFEval mini-track |
+| Role | What you plug in |
+|------|------------------|
+| Target model | Any GGUF (or compatible) served by `llama-server` / OpenAI-compatible HTTP API |
+| Judge | OpenRouter (any chat model) |
+| Dataset | Any id under `datasets/` (manifest + samples) |
 | Frameworks | Promptfoo · DeepEval · RAGAS |
 
-**Reproduce a full portfolio run on your own machine:** see [docs/reproduce-run.md](docs/reproduce-run.md) (models, datasets, links, env, commands).
+Bundled manifests, download helpers, and server scripts are **examples** — swap them via env, profiles, or your own `datasets/{id}/`.
 
+Longer reproduction notes: [docs/reproduce-run.md](docs/reproduce-run.md).
 
 ## Prerequisites
 
 - Python 3.11+
 - Node.js 20+ (for Promptfoo)
-- [llama.cpp](https://github.com/ggml-org/llama.cpp) with `llama-server` (CPU build, no CUDA)
+- [llama.cpp](https://github.com/ggml-org/llama.cpp) with `llama-server` (or another OpenAI-compatible local server)
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp
 cmake llama.cpp -B llama.cpp/build -DGGML_CUDA=OFF
 cmake --build llama.cpp/build --config Release -j --target llama-server
-# Add llama.cpp/build/bin to PATH
+# Add llama.cpp/build/bin to PATH (or set LLAMA_SERVER)
 ```
-
-## Judge configuration
-
-**Default:** OpenRouter with [`tencent/hy3:free`](https://openrouter.ai/tencent/hy3:free) — free 295B MoE, good for eval scoring. **Note:** free tier ends **July 21, 2026**.
-
-Copy `.env.example` → `.env` and set `OPENROUTER_API_KEY`. To switch models without touching provider-specific vars, use `JUDGE_MODEL`:
-
-```bash
-JUDGE_PROVIDER=openrouter          # default
-JUDGE_MODEL=tencent/hy3:free         # optional override
-OPENROUTER_API_KEY=sk-or-v1-...
-```
-
-```bash
-make smoke-judge                   # uses configured judge
-make smoke-judge-openrouter        # force OpenRouter
-make smoke-judge-glm               # force GLM (needs zai_api_key)
-```
-
-### GLM judge (optional)
-
-Per [Z.ai Chat Completion API](https://docs.z.ai/api-reference/llm/chat-completion), supported text models include `glm-5.2`, `glm-5-turbo`, `glm-4.7`, etc.
-
-### Important: Two API endpoints
-
-| Key type | Base URL | Where to get key |
-|----------|----------|------------------|
-| **GLM Coding Plan** (subscription) | `https://api.z.ai/api/coding/paas/v4` | Coding Plan subscription |
-| Developer API (pay-per-token) | `https://api.z.ai/api/paas/v4` | [z.ai/manage-apikey](https://z.ai) |
-| Mainland China | `https://open.bigmodel.cn/api/paas/v4` | bigmodel.cn |
-
-**Wrong endpoint → 429 "Insufficient balance"** even with a valid Coding Plan key.
-
-Set in `.env`:
-
-```bash
-GLM_BASE_URL=https://api.z.ai/api/coding/paas/v4   # Coding Plan
-GLM_MODEL=glm-5.2                                  # or glm-5-turbo, glm-4.7
-GLM_THINKING=disabled                              # recommended for judge
-```
-
-| Model | Best for |
-|-------|----------|
-| `glm-5.2` | Highest quality judge (Coding Plan quota) |
-| `glm-5-turbo` | Faster judge, many eval calls |
-| `glm-4.7` / `glm-4.7-flash` | Lighter fallback |
-
-Set `JUDGE_PROVIDER=glm` and `JUDGE_MODEL=glm-5.2` (or `GLM_MODEL=glm-5.2`).
-
-## LinkedIn showcase (SciQ + Bonsai)
-
-Primary demo dataset: [allenai/sciq](https://huggingface.co/datasets/allenai/sciq) — science QA with evidence (`support` → context). Runs all three frameworks.
-
-```bash
-# Prepare SciQ (optional; make lab downloads it)
-make prepare-sciq
-
-# Full showcase run (~30 samples × 3 frameworks, Bonsai only)
-EVAL_DATASET=sciq PROMPTFOO_LIMIT=30 DEEPEVAL_LIMIT=30 RAGAS_LIMIT=30 make lab MODEL=bonsai
-
-# Optional instruction-following wing (Promptfoo)
-IFEVAL_LIMIT=10 make eval-promptfoo-ifeval
-```
-
-Set in `.env`:
-
-```bash
-EVAL_DATASET=sciq
-HF_TOKEN=hf_...          # or HF_FULL_ACCESS — higher HF rate limits
-```
-
-## Add your own dataset (drop-in CSV/JSONL)
-
-Datasets live in `datasets/{id}/` with a `dataset.yaml` manifest. No Python changes needed.
-
-```bash
-cp -r datasets/_template datasets/my_task
-# put files in datasets/my_task/raw/
-# edit dataset.yaml (column mapping)
-
-make datasets-list
-make prepare-dataset DATASET=my_task LIMIT=50
-EVAL_DATASET=my_task make lab MODEL=bonsai
-```
-
-Example: `datasets/bitext_retail/` reads the local CSV at repo root and prepares intent-classification samples.
-
-See `datasets/_template/README.md` and `docs/superpowers/specs/2026-07-15-flexible-datasets-design.md`.
 
 ## Quick Start
 
 ```bash
-# 1. Setup
-cp .env.example .env   # add API keys + optional HF_TOKEN
+# 1. Config
+cp .env.example .env   # OPENROUTER_API_KEY + optional HF_TOKEN
+# Point TARGET_MODEL_* (or MODEL-specific URLs) at your local server
 make setup
 
-# 2. Download & prepare samples
-make prepare-sciq      # SciQ showcase (recommended)
-# make prepare         # UDA-QA feta+nq (hard RAG)
+# 2. Dataset — list, prepare, or add your own
+make datasets-list
+make prepare-dataset DATASET=<id> LIMIT=50
+# or: cp -r datasets/_template datasets/my_task  → edit dataset.yaml
 
-# 3. Start local model (separate terminal)
-make server-bonsai     # or: make server  (Gemma)
+# 3. Model server (separate terminal)
+# Example helpers exist (make server / server-bonsai / …) — or start your own llama-server
+# and set TARGET_MODEL_BASE_URL / TARGET_MODEL_NAME in .env
 
-# 4. Smoke test judge
+# 4. Smoke judge
 make smoke-judge
 
-# 5. Run evals
-make eval-promptfoo              # EVAL_DATASET samples
-make eval-promptfoo-ifeval       # IFEval mini-track
-make eval-all                    # prepare + promptfoo + deepeval + ragas × models
-make lab MODEL=bonsai            # ↑ + serve dashboard on :3100
-
-# 6. Dashboard
-make dashboard          # export JSON → results/dashboard/
-make dashboard-serve    # live HTMX UI on :3100
+# 5. Run
+EVAL_DATASET=<id> make lab MODEL=<model_id>
+# or shorter limits:
+# EVAL_DATASET=<id> PROMPTFOO_LIMIT=5 DEEPEVAL_LIMIT=3 RAGAS_LIMIT=5 make lab MODEL=<model_id>
 ```
 
-### One command (recommended)
+`make lab` will:
+
+1. Prepare `EVAL_DATASET` if needed  
+2. Start known model servers when `MODEL` matches a helper (otherwise use your already-running API)  
+3. Run Promptfoo, DeepEval, and RAGAS  
+4. Serve the dashboard on **:3100**
+
+**Dashboard:** http://127.0.0.1:3100/  
+Exports: `/exports/combined_report.json` · `/exports/combined_report.md`  
+Optional Promptfoo UI: http://127.0.0.1:15500/
 
 ```bash
-make lab MODEL=bonsai           # SciQ default dataset + Bonsai + dashboard
-make lab MODEL=gemma
-./scripts/run_lab.sh --model bonsai
+make export-report      # results/report/ without serving
+make dashboard-serve    # live UI only
+# DASHBOARD_PORT=3000 make dashboard-serve
 ```
 
-This will:
-1. Download/prepare `EVAL_DATASET` (default: `sciq`)
-2. Start model servers if not running
-3. Run Promptfoo, DeepEval, and RAGAS
-4. Build & serve the dashboard
-
-**URLs (live UI on :3100):**
-- http://127.0.0.1:3100/ — overview, filters, progress bar
-- http://127.0.0.1:3100/exports/combined_report.json — export for external tools
-- http://127.0.0.1:3100/exports/combined_report.md — LinkedIn / Notion friendly
-- http://127.0.0.1:15500/ — full Promptfoo interactive UI (iframe on Promptfoo tab)
-
-Export without serving:
+## Judge (OpenRouter)
 
 ```bash
-make export-report   # → results/report/combined_report.{json,md}
-make dashboard       # copies exports into results/dashboard/ for /exports/*
+JUDGE_PROVIDER=openrouter
+JUDGE_MODEL=<openrouter-model-id>   # e.g. tencent/hy3:free
+OPENROUTER_API_KEY=sk-or-v1-...
 ```
-
-(Default dashboard port is **3100** because `:3000` is often taken. Override: `DASHBOARD_PORT=3000 make dashboard-serve`.)
-
-For a quick dev run (shorter eval time):
 
 ```bash
-EVAL_DATASET=sciq PROMPTFOO_LIMIT=5 DEEPEVAL_LIMIT=3 RAGAS_LIMIT=5 make lab MODEL=bonsai
+make smoke-judge
 ```
 
-Hard RAG (UDA-QA) instead of SciQ:
+## Datasets
+
+Any folder `datasets/{id}/` with a `dataset.yaml` is a first-class eval track.
 
 ```bash
-EVAL_DATASET=feta make lab MODEL=bonsai
+make datasets-list
+make prepare-dataset DATASET=<id> LIMIT=50
+EVAL_DATASET=<id> make lab MODEL=<model_id>
 ```
+
+Add your own:
+
+```bash
+cp -r datasets/_template datasets/my_task
+# put files in datasets/my_task/raw/
+# edit datasets/my_task/dataset.yaml (column mapping)
+```
+
+See `datasets/_template/README.md`. Bundled ids (`sciq`, `financial_qa`, …) are samples you can keep or ignore.
+
+## Models
+
+Eval runners call an OpenAI-compatible `/v1` endpoint. Configure in `.env`:
+
+```bash
+TARGET_MODEL_BASE_URL=http://127.0.0.1:8080/v1
+TARGET_MODEL_NAME=<served-model-name>
+# optional extras for multi-model labs, e.g. BONSAI_* / QWEN_* on other ports
+```
+
+Convenience Make targets (`make download-*`, `make server-*`) download/start a few known GGUFs. Use them only if useful; otherwise point env at whatever you already serve.
+
+`MODEL=<id>` in Make selects which configured endpoint the lab uses (see Makefile / start scripts). Share exact recipe via profiles (below).
 
 ## Shareable run profiles
 
-Export a secret-free recipe (dataset, temperature, limits, model HF refs):
+Secret-free YAML: dataset, temperature, limits, model HF refs.
 
 ```bash
 make profile-export NAME=my-run
-# → profiles/my-run.yaml (gitignored unless under profiles/examples/)
+make profile-import PROFILE=profiles/examples/bonsai-sciq-t07.yaml   # example only
+# → writes .env.profile; does not touch API keys
+# download weights if the profile lists hf_repo, then:
+make lab MODEL=<model_id>
 ```
 
-Import on another clone:
-
-```bash
-make profile-import PROFILE=profiles/examples/bonsai-sciq-t07.yaml
-# writes .env.profile — does not touch API keys in .env
-make download-bonsai   # or use Dashboard → Download model (from profile)
-make lab MODEL=bonsai
-```
+Dashboard: **Download model (from profile)** uses the same helpers + `HF_TOKEN` from `.env`.
 
 ## Update eval tools
 
@@ -208,32 +137,26 @@ make lab MODEL=bonsai
 make tools-update   # uv pip -U + promptfoo@latest; prints versions
 ```
 
-Scores can change when frameworks update — record printed versions with your profile when comparing runs.
+Framework upgrades can change scores — record printed versions next to your profile.
 
 ## Project Structure
 
 ```
-data/
-  raw/sciq/            # HF SciQ downloads
-  raw/uda-qa/          # HF UDA-QA parquet
-  raw/ifeval/          # IFEval selection
-  processed/sciq/      # SciQ EvalSample JSONL
-  processed/uda-qa/    # UDA-QA EvalSample JSONL
-shared/
-  adapters/            # target_model, judge, dataset_loader, hf_auth
-eval/
-  promptfoo/           # YAML-driven A/B + IFEval
-  deepeval/            # pytest-style eval
-  ragas/               # RAG metrics
-models/
-  start-server.sh      # Gemma CPU server
-  start-bonsai-server.sh
-results/               # eval outputs (gitignored)
-docs/superpowers/      # design specs + plans
+datasets/              # {id}/dataset.yaml (+ optional helpers)
+data/                  # raw / processed / models (gitignored)
+shared/                # adapters, dataset registry, reporting, profiles
+eval/                  # promptfoo · deepeval · ragas
+models/                # example llama-server start scripts
+profiles/examples/     # example shareable recipes
+scripts/               # CLI, downloads, lab runner, dashboard
+web/                   # HTMX dashboard
+results/               # outputs (gitignored)
+docs/                  # guides and notes
 ```
 
 ## Docs
 
-- Design spec: `docs/superpowers/specs/2026-07-15-llm-testing-lab-design.md`
-- Bonsai showcase dataset: `docs/superpowers/specs/2026-07-15-bonsai-showcase-dataset-design.md`
-- Implementation plan: `docs/superpowers/plans/2026-07-15-llm-testing-lab.md`
+- [docs/reproduce-run.md](docs/reproduce-run.md) — example reproduction walkthrough  
+- [docs/benchmarks/comparable-baseline.md](docs/benchmarks/comparable-baseline.md) — comparing two local models fairly  
+- [docs/bonsai/bonsai-27b-whitepaper-summary.md](docs/bonsai/bonsai-27b-whitepaper-summary.md) — notes for one bundled model example  
+- `datasets/_template/README.md` — custom datasets  
