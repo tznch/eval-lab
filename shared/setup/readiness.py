@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from shared.datasets.registry import discover_datasets, get_dataset, list_dataset_ids, samples_path
-from shared.env_files import load_project_env
+from shared.env_files import load_project_env, secret_status
 from shared.profiles.registry import MODEL_REGISTRY
 from shared.setup.model_endpoint import model_weights_path, resolve_model_endpoint
 
@@ -252,6 +252,7 @@ def setup_options(env: dict[str, str] | None = None) -> dict[str, Any]:
             "deepeval": int(e.get("DEEPEVAL_LIMIT", "25")),
             "ragas": int(e.get("RAGAS_LIMIT", "25")),
         },
+        "secrets": secret_status(e),
     }
 
 

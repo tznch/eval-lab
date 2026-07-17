@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from shared.env_files import load_project_env
+from shared.env_files import load_project_env, save_managed_secrets, secret_status
 from shared.profiles import SECRET_KEYS
 from shared.profiles.download import download_profile_model
 from shared.profiles.io import (
@@ -137,6 +137,17 @@ class EvalRunPayload(BaseModel):
                 seen.add(d)
                 out.append(d)
         return out
+
+
+class SecretsPayload(BaseModel):
+    """Lowercase field names so profile secret-key guard does not reject this body."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    hf_token: str | None = None
+    openrouter_api_key: str | None = None
+    clear_hf_token: bool = False
+    clear_openrouter_api_key: bool = False
 
 
 def _safe_profile_filename(name: str) -> str:
@@ -521,6 +532,82 @@ def create_app() -> FastAPI:
     def api_setup_options() -> JSONResponse:
         load_project_env()
         return JSONResponse(setup_options())
+
+    @app.get("/api/setup/secrets")
+    def api_setup_secrets_get() -> JSONResponse:
+        load_project_env()
+        return JSONResponse({"ok": True, "secrets": secret_status()})
+
+    @app.post("/api/setup/secrets")
+    def api_setup_secrets_post(payload: dict = Body(...)) -> JSONResponse:
+        # Reject accidental uppercase secret key names in body (profiles pattern).
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Use hf_token / openrouter_api_key fields, not "
+                        + ", ".join(bad_keys)
+                    ),
+                },
+                status_code=400,
+            )
+        try:
+            body = SecretsPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Invalid body: optional hf_token, openrouter_api_key, "
+                        "clear_hf_token, clear_openrouter_api_key"
+                    ),
+                },
+                status_code=400,
+            )
+
+        hf: str | None = None
+        or_key: str | None = None
+        if body.clear_hf_token:
+            hf = ""
+        elif body.hf_token is not None:
+            hf = body.hf_token
+        if body.clear_openrouter_api_key:
+            or_key = ""
+        elif body.openrouter_api_key is not None:
+            or_key = body.openrouter_api_key
+
+        if hf is None and or_key is None:
+            return JSONResponse(
+                {"ok": False, "message": "No secret fields to update"},
+                status_code=400,
+            )
+
+        try:
+            status = save_managed_secrets(
+                hf_token=hf,
+                openrouter_api_key=or_key,
+                path=ROOT / ".env",
+            )
+        except ValueError as exc:
+            return JSONResponse(
+                {"ok": False, "message": str(exc)},
+                status_code=400,
+            )
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "message": str(exc)},
+                status_code=500,
+            )
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": "Saved to .env (not included in profile export)",
+                "secrets": status,
+            }
+        )
 
     @app.get("/api/setup/readiness")
     def api_setup_readiness(

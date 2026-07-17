@@ -82,6 +82,10 @@ def test_overview_uses_view_links_and_setup():
     assert "switch-tab" not in html
     assert "Setup" in html
     assert "Import profile YAML" in html
+    assert "API keys" in html
+    assert "Save keys" in html
+    assert 'id="setup-hf-token"' in html
+    assert 'id="setup-or-key"' in html
 
 
 def test_overview_has_huggingface_import_forms():
@@ -442,6 +446,9 @@ def test_setup_options_json():
     assert "dataset_catalog" in data
     assert isinstance(data["dataset_catalog"], list)
     assert data["frameworks"] == ["promptfoo", "deepeval", "ragas"]
+    assert "secrets" in data
+    assert "hf_token" in data["secrets"]
+    assert "configured" in data["secrets"]["hf_token"]
     # Only folders with dataset.yaml — not legacy-only ids like paper_text
     assert "paper_text" not in data["datasets"]
     assert "feta" not in data["datasets"]
@@ -449,6 +456,58 @@ def test_setup_options_json():
         row = data["dataset_catalog"][0]
         assert {"id", "name", "description"} <= set(row)
         assert data["datasets"] == [d["id"] for d in data["dataset_catalog"]]
+
+
+def test_secrets_get_masks_values(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "hf_abcdefghijklmnop")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-abcdefghijklmnop")
+    client = TestClient(create_app())
+    r = client.get("/api/setup/secrets")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["secrets"]["hf_token"]["configured"] is True
+    assert "abcdefghijklmnop" not in str(body)
+
+
+def test_secrets_post_writes_env(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr("scripts.dashboard_api.ROOT", tmp_path)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/setup/secrets",
+        json={"hf_token": "hf_newtoken1234", "openrouter_api_key": "sk-or-newkey1234"},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    text = env_path.read_text(encoding="utf-8")
+    assert "HF_TOKEN=hf_newtoken1234" in text
+    assert "OPENROUTER_API_KEY=sk-or-newkey1234" in text
+    assert "hf_newtoken1234" not in str(r.json()["secrets"])
+
+
+def test_secrets_post_rejects_uppercase_secret_keys():
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/setup/secrets",
+        json={"HF_TOKEN": "nope"},
+    )
+    assert r.status_code == 400
+
+
+def test_secrets_post_clear(tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    env_path.write_text("HF_TOKEN=hf_keep\nOPENROUTER_API_KEY=sk-keep\n", encoding="utf-8")
+    monkeypatch.setattr("scripts.dashboard_api.ROOT", tmp_path)
+    monkeypatch.setenv("HF_TOKEN", "hf_keep")
+    client = TestClient(create_app())
+    r = client.post("/api/setup/secrets", json={"clear_hf_token": True})
+    assert r.status_code == 200
+    text = env_path.read_text(encoding="utf-8")
+    assert "HF_TOKEN=" not in text
+    assert "OPENROUTER_API_KEY=sk-keep" in text
 
 
 def test_setup_readiness_json(monkeypatch):

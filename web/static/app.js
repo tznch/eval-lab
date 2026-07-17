@@ -39,6 +39,13 @@ function labApp() {
     setupRunMessage: "",
     _readinessTimer: null,
 
+    secretsStatus: {},
+    secretsHint: { hf: "", openrouter: "" },
+    hfTokenInput: "",
+    openrouterKeyInput: "",
+    secretsSaving: false,
+    secretsMessage: "",
+
     hfRepo: "",
     hfGgufFiles: [],
     hfFilename: "",
@@ -479,6 +486,90 @@ function labApp() {
       }
     },
 
+    async loadSecretsStatus() {
+      try {
+        const resp = await fetch("/api/setup/secrets");
+        if (!resp.ok) return;
+        const data = await resp.json();
+        this.applySecretsStatus(data.secrets || {});
+      } catch (err) {
+        console.warn("secrets status load failed", err);
+      }
+    },
+
+    applySecretsStatus(secrets) {
+      this.secretsStatus = secrets || {};
+      this.secretsHint = {
+        hf: secrets?.hf_token?.configured
+          ? `leave blank to keep ${secrets.hf_token.hint}`
+          : "hf_…",
+        openrouter: secrets?.openrouter_api_key?.configured
+          ? `leave blank to keep ${secrets.openrouter_api_key.hint}`
+          : "sk-or-…",
+      };
+    },
+
+    async saveSecrets() {
+      const body = {};
+      if (this.hfTokenInput.trim()) body.hf_token = this.hfTokenInput.trim();
+      if (this.openrouterKeyInput.trim()) {
+        body.openrouter_api_key = this.openrouterKeyInput.trim();
+      }
+      if (!Object.keys(body).length) {
+        this.secretsMessage = "Enter a new key (or use Clear)";
+        return;
+      }
+      this.secretsSaving = true;
+      this.secretsMessage = "Saving…";
+      try {
+        const resp = await fetch("/api/setup/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.message || "Save failed");
+        }
+        this.hfTokenInput = "";
+        this.openrouterKeyInput = "";
+        this.applySecretsStatus(data.secrets || {});
+        this.secretsMessage = data.message || "Saved";
+        if (this.setupHasProfile) await this.fetchReadiness();
+      } catch (error) {
+        this.secretsMessage = error instanceof Error ? error.message : "Save failed";
+      } finally {
+        this.secretsSaving = false;
+      }
+    },
+
+    async clearSecretField(which) {
+      const body =
+        which === "hf"
+          ? { clear_hf_token: true }
+          : { clear_openrouter_api_key: true };
+      this.secretsSaving = true;
+      this.secretsMessage = "Clearing…";
+      try {
+        const resp = await fetch("/api/setup/secrets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.message || "Clear failed");
+        }
+        this.applySecretsStatus(data.secrets || {});
+        this.secretsMessage = which === "hf" ? "HF token cleared" : "OpenRouter key cleared";
+        if (this.setupHasProfile) await this.fetchReadiness();
+      } catch (error) {
+        this.secretsMessage = error instanceof Error ? error.message : "Clear failed";
+      } finally {
+        this.secretsSaving = false;
+      }
+    },
+
     initSetupPanel(hasProfile) {
       if (hasProfile) {
         this.setupHasProfile = true;
@@ -505,6 +596,7 @@ function labApp() {
         }
         this.setupTemperature = options.default_temperature ?? 0.7;
         this.setupFrameworks = options.frameworks?.slice() || ["promptfoo", "deepeval", "ragas"];
+        if (options.secrets) this.applySecretsStatus(options.secrets);
         await this.fetchReadiness();
       } catch (err) {
         console.warn("setup panel load failed", err);
