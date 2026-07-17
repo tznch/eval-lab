@@ -89,6 +89,8 @@ make lab MODEL=<model_id>
 
 Or use the dashboard: **Report → Export profile YAML** on a run card, or **Import profile YAML** on Overview. After import (or when `.env.profile` already exists), use **Run eval** on Overview — pick temperature, dataset, and frameworks; the lab validates readiness (model endpoint, samples, judge when needed) and runs the pipeline in the background while the progress panel polls live status.
 
+Overview can also import models and datasets from HuggingFace. Set the required `HF_TOKEN` in `.env` or **Setup secrets**, then use **Add from HuggingFace** to list a repository's GGUF files and download one in the background, or import a dataset split by mapping its question, answer, and optional context columns; the model's local endpoint settings are saved, while the dataset manifest and prepared samples are created automatically.
+
 ---
 
 ## Reproduce step by step

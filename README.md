@@ -138,6 +138,8 @@ Dashboard: Report shows one card per `(model, temperature)` with eval tabs; **Ex
 On Overview, after import (or when `.env.profile` exists), the **Run eval** panel validates model/dataset/judge readiness and starts Promptfoo / DeepEval / RAGAS in the background with your chosen temperature, dataset, and frameworks.  
 **Download model (example profile)** fetches weights for a known example.
 
+Overview also supports importing directly from HuggingFace. Configure the required `HF_TOKEN` in `.env` or the dashboard's **Setup secrets** panel, then use **Add from HuggingFace** to list and download a repository's GGUF file in the background or import a dataset split by mapping its question, answer, and optional context columns; imported models are added to the local endpoint configuration, and imported datasets are registered and prepared for evaluation.
+
 ## Update eval tools
 
 ```bash
