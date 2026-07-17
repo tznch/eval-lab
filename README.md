@@ -117,9 +117,9 @@ TARGET_MODEL_NAME=<served-model-name>
 # optional: per-model overrides — see .env.example (MODEL_BASE_URL / MODEL_NAME pattern)
 ```
 
-Convenience Make targets (`make download-*`, `make server-*`) download/start a few known GGUFs. Use them only if useful; otherwise point env at whatever you already serve.
+Download models via Overview **Add from HuggingFace**, or set `{ID}_BASE_URL` / `{ID}_MODEL_PATH` / `{ID}_MODEL_NAME` in `.env` and start your own OpenAI-compatible server.
 
-`MODEL=<id>` in Make selects which configured endpoint the lab uses (see Makefile / start scripts). Share exact recipe via profiles (below).
+`MODEL=<id>` in Make selects which configured endpoint the lab uses. Share exact recipe via profiles (below).
 
 ## Shareable run profiles
 
@@ -127,16 +127,15 @@ Secret-free YAML: dataset, temperature, limits, model HF refs.
 
 ```bash
 make profile-export NAME=my-run
-make profile-import PROFILE=profiles/examples/<example>.yaml
+make profile-import PROFILE=path/to/profile.yaml
 # → writes .env.profile; does not touch API keys
-# download weights if the profile lists hf_repo, then:
+# download weights via Overview → Add from HuggingFace, then:
 make lab MODEL=<model_id>
 ```
 
 Dashboard: Report shows one card per `(model, temperature)` with eval tabs; **Export profile YAML** on a card downloads that run's recipe.  
 **Import profile YAML** uploads a shared recipe into `.env.profile` (no API keys).  
-On Overview, after import (or when `.env.profile` exists), the **Run eval** panel validates model/dataset/judge readiness and starts Promptfoo / DeepEval / RAGAS in the background with your chosen temperature, dataset, and frameworks.  
-**Download model (example profile)** fetches weights for a known example.
+On Overview, after import (or when `.env.profile` exists), the **Run eval** panel validates model/dataset/judge readiness and starts Promptfoo / DeepEval / RAGAS in the background with your chosen temperature, dataset, and frameworks.
 
 Overview also supports importing directly from HuggingFace. Configure the required `HF_TOKEN` in `.env` or the dashboard's **Setup secrets** panel, then use **Add from HuggingFace** to list and download a repository's GGUF file in the background or import a dataset split by mapping its question, answer, and optional context columns; imported models are added to the local endpoint configuration, and imported datasets are registered and prepared for evaluation.
 
@@ -155,8 +154,8 @@ datasets/              # {id}/dataset.yaml (+ optional helpers)
 data/                  # raw / processed / models (gitignored)
 shared/                # adapters, dataset registry, reporting, profiles
 eval/                  # promptfoo · deepeval · ragas
-models/                # example llama-server start scripts
-profiles/examples/     # example shareable recipes
+models/                # optional llama-server start helper
+profiles/              # shareable run recipes (YAML)
 scripts/               # CLI, downloads, lab runner, dashboard
 web/                   # HTMX dashboard
 results/               # outputs (gitignored)

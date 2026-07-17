@@ -42,7 +42,7 @@
 
 <section class="card wide setup-card" id="profile-actions-row">
   <h3>Setup</h3>
-  <p class="meta">Import a shareable run profile or download an example model. Export a run recipe from the Report tab.</p>
+  <p class="meta">Import a shareable run profile. Export a run recipe from the Report tab. Download models via Add from HuggingFace below.</p>
   <p class="meta action-row">
     <label class="btn secondary" for="profile-import-file">
       Import profile YAML
@@ -52,14 +52,6 @@
              hidden
              @change="importProfileFile($event)">
     </label>
-    <button class="btn secondary"
-            type="button"
-            id="btn-download-profile-model"
-            data-profile="profiles/examples/bonsai-sciq-t07.yaml"
-            data-model-id="bonsai"
-            @click="downloadProfileModel($event)">
-      Download model (example profile)
-    </button>
     <span id="profile-action-status" class="meta" aria-live="polite"></span>
   </p>
 

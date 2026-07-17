@@ -33,8 +33,11 @@ def profile_to_yaml(profile: RunProfile) -> str:
 
 
 def _model_ids_from_env() -> list[str]:
-    value = os.getenv("MODEL") or os.getenv("MODELS") or "bonsai"
-    return [model_id.strip() for model_id in value.split(",") if model_id.strip()]
+    value = os.getenv("MODEL") or os.getenv("MODELS") or ""
+    ids = [model_id.strip() for model_id in value.split(",") if model_id.strip()]
+    if not ids:
+        raise ValueError("Set MODEL or MODELS in the environment to export a profile")
+    return ids
 
 
 def export_profile_from_env(

@@ -27,7 +27,7 @@ def test_target_model_used_when_no_per_model_vars():
     assert name == "my-model"
 
 
-def test_bundled_default_last_resort():
+def test_unconfigured_model_returns_none():
     base, name = resolve_model_endpoint("bonsai", {})
-    assert base == "http://127.0.0.1:8081/v1"
-    assert name == "bonsai-27b-q1"
+    assert base is None
+    assert name is None

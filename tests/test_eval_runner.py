@@ -16,16 +16,18 @@ def test_temp_tag():
     assert temp_tag(1.0) == "t1"
 
 
-def test_find_legacy_start_script_bonsai():
-    path = find_legacy_start_script("bonsai")
-    assert path is not None
-    assert path.name == "start-bonsai-server.sh"
+def test_find_legacy_start_script_unknown():
+    assert find_legacy_start_script("no-such-model") is None
 
 
-def test_find_legacy_start_script_gemma():
-    path = find_legacy_start_script("gemma")
-    assert path is not None
-    assert path.name == "start-server.sh"
+def test_find_legacy_start_script_matches_file(tmp_path, monkeypatch):
+    models = tmp_path / "models"
+    models.mkdir()
+    script = models / "start-demo-server.sh"
+    script.write_text("#!/bin/bash\n")
+    monkeypatch.setattr("shared.setup.model_server.ROOT", tmp_path)
+    path = find_legacy_start_script("demo")
+    assert path == script
 
 
 def test_is_run_in_progress_when_running(tmp_path, monkeypatch):

@@ -12,9 +12,6 @@ from shared.profiles.io import (
     save_profile,
     write_env_profile,
 )
-from shared.profiles.registry import MODEL_REGISTRY
-
-_MAKE_DOWNLOAD_TARGETS = frozenset({"bonsai", "qwen27"})
 
 
 def cmd_export(args: argparse.Namespace) -> None:
@@ -31,17 +28,10 @@ def cmd_import(args: argparse.Namespace) -> None:
     write_env_profile(profile)
     print(f"Loaded profile {profile.name!r} from {path}")
     print("Wrote .env.profile (gitignored). Non-secret overrides active for subsequent commands.")
-    print("Suggested downloads:")
+    print("Download weights via Overview → Add from HuggingFace (or set {ID}_MODEL_PATH in .env).")
     for m in profile.models:
-        if m.id in MODEL_REGISTRY:
-            if m.id in _MAKE_DOWNLOAD_TARGETS:
-                print(f"  make download-{m.id}")
-            else:
-                print(f"  # download helper for {m.id}")
-        else:
-            print(
-                f"  # unsupported id {m.id}; known: {', '.join(sorted(MODEL_REGISTRY))}"
-            )
+        hint = f" ({m.hf_repo})" if getattr(m, "hf_repo", None) else ""
+        print(f"  model id: {m.id}{hint}")
     print(
         f"Example run: EVAL_DATASET={profile.dataset} TARGET_TEMPERATURE={profile.temperature} "
         f"PROMPTFOO_LIMIT={profile.limits.promptfoo} make lab MODEL={profile.models[0].id}"

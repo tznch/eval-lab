@@ -2,19 +2,23 @@
 # Full eval pipeline: prepare data + run Promptfoo, DeepEval, RAGAS for each target model.
 #
 # Usage:
-#   ./scripts/run_all_evals.sh                  # gemma + bonsai, default limits
-#   ./scripts/run_all_evals.sh --model gemma    # single model
-#   ./scripts/run_all_evals.sh --models gemma,bonsai
-#   ./scripts/run_all_evals.sh --skip-setup     # skip venv/npm install
-#   PROMPTFOO_LIMIT=10 DEEPEVAL_LIMIT=3 RAGAS_LIMIT=5 ./scripts/run_all_evals.sh
+#   ./scripts/run_all_evals.sh --model <id>
+#   ./scripts/run_all_evals.sh --models id1,id2
+#   ./scripts/run_all_evals.sh --model <id> --skip-setup
+#   PROMPTFOO_LIMIT=10 DEEPEVAL_LIMIT=3 RAGAS_LIMIT=5 ./scripts/run_all_evals.sh --model <id>
+#
+# Each model id must be configured in .env via HuggingFace import or manually:
+#   {ID}_BASE_URL, {ID}_MODEL_NAME, and optionally {ID}_MODEL_PATH
+#   (or TARGET_MODEL_BASE_URL / TARGET_MODEL_NAME for a single active target)
 #
 # Env overrides:
 #   PROMPTFOO_LIMIT   (default: 20)
 #   DEEPEVAL_LIMIT    (default: 5)
 #   RAGAS_LIMIT       (default: 10)
-#   EVAL_DATASET      (default: sciq) — feta|nq|sciq for promptfoo+deepeval
-#   RAGAS_CONFIG      (default: EVAL_DATASET) — dataset for RAGAS
-#   MODEL / MODELS    (default: gemma,bonsai) — comma-separated
+#   EVAL_DATASET      (default: sciq)
+#   RAGAS_CONFIG      (default: EVAL_DATASET)
+#   MODEL / MODELS    required — comma-separated model ids
+#   TARGET_TEMPERATURE (default: 0.7)
 
 set -euo pipefail
 
@@ -31,6 +35,11 @@ _env_get() {
   printf '%s' "${line#*=}" | tr -d '"' | tr -d "'"
 }
 
+_env_key_upper() {
+  # Match shared.setup.model_endpoint._env_key: non-alnum → _
+  printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | sed 's/[^A-Z0-9]/_/g'
+}
+
 VENV="${ROOT}/.venv/bin/python"
 PROMPTFOO_LIMIT="${PROMPTFOO_LIMIT:-20}"
 DEEPEVAL_LIMIT="${DEEPEVAL_LIMIT:-5}"
@@ -39,7 +48,7 @@ EVAL_DATASET="${EVAL_DATASET:-$(_env_get EVAL_DATASET)}"
 EVAL_DATASET="${EVAL_DATASET:-sciq}"
 RAGAS_CONFIG="${RAGAS_CONFIG:-$EVAL_DATASET}"
 SKIP_SETUP=0
-MODELS_CSV="${MODELS:-${MODEL:-gemma,bonsai}}"
+MODELS_CSV="${MODELS:-${MODEL:-}}"
 
 # Propagate HF token aliases for child Python processes
 if [[ -z "${HF_TOKEN:-}" ]]; then
@@ -72,7 +81,7 @@ complete_step('${EVAL_DATASET}', '${framework}', ok=${ok}, artifact='${artifact}
 }
 
 usage() {
-  sed -n '2,12p' "$0"
+  sed -n '2,20p' "$0"
   exit 0
 }
 
@@ -86,44 +95,53 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+if [[ -z "$MODELS_CSV" ]]; then
+  echo "Error: set MODEL=<id> or pass --model <id>[,id2]" >&2
+  exit 1
+fi
+
 IFS=',' read -ra MODELS <<< "$MODELS_CSV"
 
-# --- model registry ---
-model_port() {
-  case "$1" in
-    gemma)  echo 8080 ;;
-    bonsai) echo 8081 ;;
-    qwen27) echo 8082 ;;
-    *) echo "Unknown model: $1" >&2; exit 1 ;;
-  esac
-}
 model_url() {
-  case "$1" in
-    gemma)  echo "http://127.0.0.1:8080/v1" ;;
-    bonsai) echo "http://127.0.0.1:8081/v1" ;;
-    qwen27) echo "http://127.0.0.1:8082/v1" ;;
-  esac
+  local model=$1
+  local prefix env_var url
+  prefix="$(_env_key_upper "$model")"
+  env_var="${prefix}_BASE_URL"
+  url="${!env_var:-}"
+  [[ -n "$url" ]] || url="$(_env_get "$env_var")"
+  [[ -n "$url" ]] || url="${TARGET_MODEL_BASE_URL:-}"
+  [[ -n "$url" ]] || url="$(_env_get TARGET_MODEL_BASE_URL)"
+  if [[ -z "$url" ]]; then
+    echo "No BASE_URL for model ${model} (set ${env_var} or TARGET_MODEL_BASE_URL)" >&2
+    exit 1
+  fi
+  printf '%s' "$url"
 }
+
 model_name() {
-  case "$1" in
-    gemma)  echo "gemma-4-26b-a4b" ;;
-    bonsai) echo "bonsai-27b-q1" ;;
-    qwen27) echo "qwen3.6-27b-iq2" ;;
-  esac
+  local model=$1
+  local prefix env_var name
+  prefix="$(_env_key_upper "$model")"
+  env_var="${prefix}_MODEL_NAME"
+  name="${!env_var:-}"
+  [[ -n "$name" ]] || name="$(_env_get "$env_var")"
+  [[ -n "$name" ]] || name="${TARGET_MODEL_NAME:-}"
+  [[ -n "$name" ]] || name="$(_env_get TARGET_MODEL_NAME)"
+  if [[ -z "$name" ]]; then
+    echo "No MODEL_NAME for model ${model} (set ${env_var} or TARGET_MODEL_NAME)" >&2
+    exit 1
+  fi
+  printf '%s' "$name"
 }
-model_temp() {
-  case "$1" in
-    gemma)  echo "0.2" ;;
-    bonsai) echo "0.7" ;;
-    qwen27) echo "0.2" ;;
-  esac
-}
-model_start_script() {
-  case "$1" in
-    gemma)  echo "models/start-server.sh" ;;
-    bonsai) echo "models/start-bonsai-server.sh" ;;
-    qwen27) echo "models/start-qwen27-server.sh" ;;
-  esac
+
+model_port_from_url() {
+  local url=$1
+  local port
+  port="$(printf '%s' "$url" | sed -n 's|.*:\([0-9][0-9]*\)/.*|\1|p')"
+  if [[ -z "$port" ]]; then
+    port="$(printf '%s' "$url" | sed -n 's|.*:\([0-9][0-9]*\)$|\1|p')"
+  fi
+  printf '%s' "${port:-8080}"
 }
 
 wait_for_server() {
@@ -140,19 +158,29 @@ wait_for_server() {
 
 ensure_server() {
   local model=$1
-  local port
-  port="$(model_port "$model")"
-  if ss -tln 2>/dev/null | grep -q ":${port} "; then
-    log "Server :${port} (${model}) already running"
+  local url port script
+  url="$(model_url "$model")"
+  port="$(model_port_from_url "$url")"
+  if curl -sf "${url%/}/models" >/dev/null 2>&1 || \
+     ss -tln 2>/dev/null | grep -q ":${port} "; then
+    log "Server for ${model} already reachable (${url})"
     return 0
   fi
-  log "Starting ${model} server on :${port} ..."
-  bash "$(model_start_script "$model")" >"results/logs/${model}-server.log" 2>&1 &
-  if ! wait_for_server "$port"; then
-    echo "Server failed to start on :${port}. See results/logs/${model}-server.log" >&2
-    exit 1
+  script="models/start-${model}-server.sh"
+  if [[ -f "$script" ]]; then
+    log "Starting ${model} via ${script} on :${port} ..."
+    bash "$script" >"results/logs/${model}-server.log" 2>&1 &
+    if ! wait_for_server "$port"; then
+      echo "Server failed to start on :${port}. See results/logs/${model}-server.log" >&2
+      exit 1
+    fi
+    log "${model} server ready on :${port}"
+    return 0
   fi
-  log "${model} server ready on :${port}"
+  echo "Server not running for ${model} at ${url}." >&2
+  echo "Start your OpenAI-compatible server, or add models/start-${model}-server.sh." >&2
+  echo "Weights: import via dashboard Add from HuggingFace (sets ${model} env keys)." >&2
+  exit 1
 }
 
 prepare_all() {
@@ -195,23 +223,7 @@ prepare_all() {
     "$VENV" scripts/prepare_samples.py --config "$RAGAS_CONFIG" --limit 50 2>/dev/null || true
   fi
 
-  log "Download target model weights (if missing) ..."
-  need_bonsai=0
-  need_qwen=0
-  for m in "${MODELS[@]}"; do
-    [[ "$m" == "bonsai" ]] && need_bonsai=1
-    [[ "$m" == "qwen27" ]] && need_qwen=1
-  done
-  if [[ "$need_bonsai" -eq 1 && ! -f data/models/bonsai-27b-q1/Bonsai-27B-Q1_0.gguf ]]; then
-    "$VENV" scripts/download_bonsai.py
-  elif [[ "$need_bonsai" -eq 1 ]]; then
-    log "Bonsai model already cached"
-  fi
-  if [[ "$need_qwen" -eq 1 && ! -f data/models/qwen3.6-27b-iq2/Qwen3.6-27B-UD-IQ2_XXS.gguf ]]; then
-    "$VENV" scripts/download_qwen27.py
-  elif [[ "$need_qwen" -eq 1 ]]; then
-    log "Qwen3.6-27B IQ2_XXS already cached"
-  fi
+  log "Model weights: use dashboard Add from HuggingFace or set {ID}_MODEL_PATH in .env"
 
   log "Smoke test judge ..."
   "$VENV" scripts/smoke_judge.py
@@ -225,7 +237,7 @@ export_model_env() {
   export EVAL_DATASET
   export TARGET_MODEL_BASE_URL="$(model_url "$model")"
   export TARGET_MODEL_NAME="$(model_name "$model")"
-  export TARGET_TEMPERATURE="${TARGET_TEMPERATURE:-$(model_temp "$model")}"
+  export TARGET_TEMPERATURE="${TARGET_TEMPERATURE:-0.7}"
   local tag="t${TARGET_TEMPERATURE}"
   export PROMPTFOO_OUTPUT="${ROOT}/results/promptfoo/${model}/${tag}/${EVAL_DATASET}/output.json"
   export DEEPEVAL_OUTPUT="${ROOT}/results/deepeval/${model}/${tag}/${EVAL_DATASET}/junit.xml"
@@ -300,9 +312,9 @@ print_summary() {
   echo "Results:"
   for model in "${MODELS[@]}"; do
     echo "  ${model}:"
-    echo "    promptfoo → results/promptfoo/${model}/${EVAL_DATASET}/output.json"
-    echo "    deepeval  → results/deepeval/${model}/${EVAL_DATASET}/junit.xml"
-    echo "    ragas     → results/ragas/${model}/${RAGAS_CONFIG}_scores.csv"
+    echo "    promptfoo → results/promptfoo/${model}/"
+    echo "    deepeval  → results/deepeval/${model}/"
+    echo "    ragas     → results/ragas/${model}/"
     echo "    logs      → results/logs/${model}-*.log"
   done
   echo
@@ -324,8 +336,7 @@ prepare_all
 
 log "=== START SERVERS ==="
 if [[ ${#MODELS[@]} -gt 1 ]]; then
-  warn "Multiple models requested — starting servers in parallel (ensure enough RAM)."
-  warn "For 27B models use one at a time: make stop-servers && make portfolio-qwen27"
+  warn "Multiple models requested — start one server per id (ensure enough RAM)."
 fi
 for model in "${MODELS[@]}"; do
   ensure_server "$model"

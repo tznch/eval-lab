@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # Start a local target via llama-server (OpenAI-compatible API).
-# Set LLAMA_SERVER and LLAMA_HF_MODEL (or rely on defaults below).
+# Requires LLAMA_HF_MODEL (HF GGUF repo:quant) or set LLAMA_SERVER / LLAMA_PORT.
 set -euo pipefail
 
 LLAMA_SERVER="${LLAMA_SERVER:-$HOME/.unsloth/llama.cpp/llama-server}"
 THREADS="${LLAMA_THREADS:-$(nproc)}"
 PORT="${LLAMA_PORT:-8080}"
-# Override with your HF GGUF repo:quant, e.g. org/Model-GGUF:Q4_K_M
-MODEL="${LLAMA_HF_MODEL:-unsloth/gemma-4-26B-A4B-it-GGUF:UD-Q4_K_XL}"
+
+if [[ -z "${LLAMA_HF_MODEL:-}" ]]; then
+  echo "Error: set LLAMA_HF_MODEL to a HuggingFace GGUF id, e.g. org/Model-GGUF:Q4_K_M"
+  exit 1
+fi
+MODEL="$LLAMA_HF_MODEL"
 
 if [[ ! -x "$LLAMA_SERVER" ]]; then
   echo "Error: llama-server not found at $LLAMA_SERVER"

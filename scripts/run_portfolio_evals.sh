@@ -2,10 +2,12 @@
 # Run balanced real-world portfolio: sciq + fintech + ecommerce + support intent
 #
 # Usage:
-#   ./scripts/run_portfolio_evals.sh --model bonsai
-#   PORTFOLIO_LIMIT=25 ./scripts/run_portfolio_evals.sh --model bonsai --skip-setup
+#   ./scripts/run_portfolio_evals.sh --model <id>
+#   PORTFOLIO_LIMIT=25 TARGET_TEMPERATURE=0.7 ./scripts/run_portfolio_evals.sh --model <id> --skip-setup
 #
 # Env:
+#   MODEL             required model id (or pass --model)
+#   TARGET_TEMPERATURE  sampling temperature (default: 0.7)
 #   PORTFOLIO_LIMIT   per-dataset sample count (default: 25)
 #   PORTFOLIO_DATASETS  comma list (default: sciq,financial_qa,ecommerce_faq,bitext_intent)
 
@@ -15,7 +17,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 VENV="${ROOT}/.venv/bin/python"
-MODEL="${MODEL:-bonsai}"
+MODEL="${MODEL:-}"
 PORTFOLIO_LIMIT="${PORTFOLIO_LIMIT:-25}"
 PORTFOLIO_DATASETS="${PORTFOLIO_DATASETS:-$("$VENV" -c "from shared.datasets.registry import portfolio_dataset_ids; print(','.join(portfolio_dataset_ids()))")}"
 SKIP_SETUP=0
@@ -27,6 +29,11 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown: $1"; exit 1 ;;
   esac
 done
+
+if [[ -z "$MODEL" ]]; then
+  echo "Error: set MODEL=<id> or pass --model <id>" >&2
+  exit 1
+fi
 
 log() { printf '\n[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 
@@ -42,14 +49,9 @@ for ds in "${DATASETS[@]}"; do
   "$VENV" scripts/prepare_samples.py --config "$ds" --limit "$PORTFOLIO_LIMIT"
 done
 
-log "=== PORTFOLIO EVAL (${MODEL}, temp=${TARGET_TEMPERATURE:-auto}) ==="
+export TARGET_TEMPERATURE="${TARGET_TEMPERATURE:-0.7}"
+log "=== PORTFOLIO EVAL (${MODEL}, temp=${TARGET_TEMPERATURE}) ==="
 export MODEL
-case "$MODEL" in
-  bonsai) _DEFAULT_TEMP="0.7" ;;
-  qwen27) _DEFAULT_TEMP="0.2" ;;
-  *) _DEFAULT_TEMP="0.2" ;;
-esac
-export TARGET_TEMPERATURE="${TARGET_TEMPERATURE:-$_DEFAULT_TEMP}"
 TEMP_TAG="t${TARGET_TEMPERATURE}"
 "$VENV" -c "
 from shared.reporting.run_status import init_run

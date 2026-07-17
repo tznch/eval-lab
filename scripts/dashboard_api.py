@@ -14,7 +14,6 @@ from fastapi.templating import Jinja2Templates
 
 from shared.env_files import load_project_env, save_managed_secrets, secret_status
 from shared.profiles import SECRET_KEYS
-from shared.profiles.download import download_profile_model
 from shared.profiles.io import (
     export_profile_from_env,
     load_profile,
@@ -66,13 +65,6 @@ def _filters_from_request(request: Request) -> tuple[dict, object]:
 
 def _panel(request: Request) -> str | None:
     return request.query_params.get("panel")
-
-
-class ModelDownloadPayload(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    profile: str | None = None
-    model_id: str | None = None
 
 
 class HFModelFilesPayload(BaseModel):
@@ -381,76 +373,6 @@ def create_app() -> FastAPI:
     @app.get("/api/hf/jobs/current")
     def api_hf_current_job() -> JSONResponse:
         return JSONResponse(read_job() or {"status": "idle"})
-
-    @app.post("/api/models/download")
-    def api_models_download(payload: dict = Body(...)) -> JSONResponse:
-        bad_keys = sorted(_secret_keys_in(payload))
-        if bad_keys:
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "message": (
-                        "Secret keys not allowed in body: "
-                        + ", ".join(bad_keys)
-                    ),
-                    "path": None,
-                },
-                status_code=400,
-            )
-
-        try:
-            body = ModelDownloadPayload.model_validate(payload)
-        except ValidationError:
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "message": (
-                        "Invalid request body: profile must be a string "
-                        "and model_id must be a string or null"
-                    ),
-                    "path": None,
-                },
-                status_code=400,
-            )
-
-        relative_path = (
-            body.profile or "profiles/examples/bonsai-sciq-t07.yaml"
-        )
-        profile_path = (ROOT / relative_path).resolve()
-        if (
-            not profile_path.is_relative_to(ROOT.resolve())
-            or not profile_path.is_file()
-        ):
-            return JSONResponse(
-                {
-                    "ok": False,
-                    "message": f"Profile not found: {relative_path}",
-                    "path": None,
-                },
-                status_code=404,
-            )
-
-        try:
-            profile = load_profile(profile_path)
-            output_path = download_profile_model(profile, body.model_id)
-        except ValueError as exc:
-            return JSONResponse(
-                {"ok": False, "message": str(exc), "path": None},
-                status_code=400,
-            )
-        except Exception as exc:
-            return JSONResponse(
-                {"ok": False, "message": str(exc), "path": None},
-                status_code=500,
-            )
-
-        return JSONResponse(
-            {
-                "ok": True,
-                "message": "Download complete",
-                "path": str(output_path),
-            }
-        )
 
     @app.post("/api/profiles/import")
     def api_profiles_import(payload: dict = Body(...)) -> JSONResponse:

@@ -240,7 +240,7 @@ FRAMEWORK_GUIDES: dict[str, FrameworkGuide] = {
         ),
         caveats=(
             "Report default dataset tag reflects last build — portfolio spans multiple tracks.",
-            "External benchmarks (Bonsai whitepaper) use different harness — see docs/benchmarks/comparable-baseline.md.",
+            "External benchmarks use a different harness — compare only runs from this lab with the same dataset, judge, and tool versions.",
         ),
     ),
 }

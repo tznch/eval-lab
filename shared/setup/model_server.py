@@ -127,11 +127,6 @@ def start_model_server(
 
 
 def find_legacy_start_script(model_id: str) -> Path | None:
-    """Optional bash helpers under models/ — fallback only."""
+    """Optional per-id bash helper: models/start-{model_id}-server.sh."""
     specific = ROOT / "models" / f"start-{model_id}-server.sh"
-    if specific.is_file():
-        return specific
-    generic = ROOT / "models" / "start-server.sh"
-    if model_id == "gemma" and generic.is_file():
-        return generic
-    return None
+    return specific if specific.is_file() else None

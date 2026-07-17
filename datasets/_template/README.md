@@ -4,7 +4,7 @@
 2. Put CSV or JSONL files in `raw/`
 3. Edit `dataset.yaml` — map your column names in `source.mapping`
 4. Prepare: `make prepare-dataset DATASET=my_task`
-5. Eval: `EVAL_DATASET=my_task make lab MODEL=bonsai`
+5. Eval: `EVAL_DATASET=my_task make lab MODEL=<model_id>`
 
 ## Source types
 

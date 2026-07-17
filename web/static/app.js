@@ -258,34 +258,6 @@ function labApp() {
       this.saveAndReload();
     },
 
-    async downloadProfileModel(event) {
-      const button = event.currentTarget;
-      const status = document.getElementById("profile-action-status");
-      if (!status) return;
-
-      button.disabled = true;
-      status.textContent = "Downloading…";
-      try {
-        const response = await fetch("/api/models/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            profile: button.dataset.profile,
-            model_id: button.dataset.modelId || null,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          throw new Error(data.message || "Download failed");
-        }
-        status.textContent = data.path ? `${data.message}: ${data.path}` : data.message;
-      } catch (error) {
-        status.textContent = error instanceof Error ? error.message : "Download failed";
-      } finally {
-        button.disabled = false;
-      }
-    },
-
     async exportRunProfile(event) {
       const button = event.currentTarget;
       const status =

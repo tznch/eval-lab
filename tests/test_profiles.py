@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from shared.profiles.download import download_profile_model
 from shared.profiles.io import (
     export_profile_from_env,
     load_profile,
@@ -167,13 +166,4 @@ def test_export_profile_from_env(monkeypatch):
     assert p.dataset == "sciq"
     assert p.temperature == 0.7
     assert p.models[0].id == "bonsai"
-    assert p.models[0].hf_repo
     assert p.limits.promptfoo == 30
-
-
-def test_download_unknown_model_lists_supported():
-    p = profile_from_dict(
-        {"name": "demo", "dataset": "sciq", "models": [{"id": "nope"}]}
-    )
-    with pytest.raises(ValueError, match="bonsai"):
-        download_profile_model(p, "nope")

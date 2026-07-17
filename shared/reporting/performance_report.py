@@ -33,38 +33,8 @@ class ModelSpec:
     notes: str = ""
 
 
-MODEL_REGISTRY: dict[str, ModelSpec] = {
-    "bonsai": ModelSpec(
-        id="bonsai",
-        name="Bonsai-27B Q1",
-        quant="Q1_0",
-        bpw=1.125,
-        gguf_gb=3.6,
-        port=8081,
-        gguf_path="data/models/bonsai-27b-q1/Bonsai-27B-Q1_0.gguf",
-        notes="PrismML 1-bit transform of Qwen3.6-27B",
-    ),
-    "qwen27": ModelSpec(
-        id="qwen27",
-        name="Qwen3.6-27B IQ2_XXS",
-        quant="UD-IQ2_XXS",
-        bpw=2.8,
-        gguf_gb=9.4,
-        port=8082,
-        gguf_path="data/models/qwen3.6-27b-iq2/Qwen3.6-27B-UD-IQ2_XXS.gguf",
-        notes="Whitepaper comparable conventional quant baseline",
-    ),
-    "gemma": ModelSpec(
-        id="gemma",
-        name="Gemma-4-26B",
-        quant="A4B",
-        bpw=4.0,
-        gguf_gb=0.0,
-        port=8080,
-        gguf_path="(configured via TARGET_MODEL)",
-        notes="Optional lab target",
-    ),
-}
+# Optional static specs for known lab models. Unknown ids fall back gracefully.
+MODEL_REGISTRY: dict[str, ModelSpec] = {}
 
 
 def _fmt_seconds(ms: int | float | None) -> str:

@@ -8,13 +8,6 @@ from pathlib import Path
 
 from shared.profiles.registry import MODEL_REGISTRY
 
-# Bundled example defaults (last resort when env unset)
-_BUNDLED_DEFAULTS: dict[str, tuple[str, str]] = {
-    "gemma": ("http://127.0.0.1:8080/v1", "gemma-4-26b-a4b"),
-    "bonsai": ("http://127.0.0.1:8081/v1", "bonsai-27b-q1"),
-    "qwen27": ("http://127.0.0.1:8082/v1", "qwen3.6-27b-iq2"),
-}
-
 
 def _env_key(model_id: str, suffix: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9]", "_", model_id).upper()
@@ -28,7 +21,7 @@ def resolve_model_endpoint(model_id: str, env: dict[str, str] | None = None) -> 
     if not model:
         return None, None
 
-    # Per-model overrides are most specific (e.g. BONSAI_BASE_URL).
+    # Per-model overrides are most specific (e.g. MY_MODEL_BASE_URL).
     per_base = (e.get(_env_key(model, "BASE_URL")) or "").strip()
     per_name = (e.get(_env_key(model, "MODEL_NAME")) or "").strip()
     if per_base and per_name:
@@ -43,13 +36,11 @@ def resolve_model_endpoint(model_id: str, env: dict[str, str] | None = None) -> 
         if base and name:
             return base, name
 
-    if model in _BUNDLED_DEFAULTS:
-        return _BUNDLED_DEFAULTS[model]
-
     return None, None
 
 
 def model_weights_path(model_id: str) -> Path | None:
+    """Legacy registry path lookup (usually unused; prefer {ID}_MODEL_PATH)."""
     spec = MODEL_REGISTRY.get(model_id)
     if not spec:
         return None

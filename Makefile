@@ -1,4 +1,4 @@
-.PHONY: setup download download-sciq download-bonsai download-qwen27 download-qwen36q4 download-realworld prepare prepare-sciq prepare-portfolio prepare-dataset datasets-list clean-results stop-servers promptfoo-tests server server-bonsai server-qwen27 smoke-judge smoke-target smoke-bonsai eval-promptfoo eval-promptfoo-ifeval eval-deepeval eval-ragas eval-all lab lab-portfolio portfolio portfolio-qwen27 dashboard export-report dashboard-serve profile-export profile-import tools-update
+.PHONY: setup download download-sciq download-realworld prepare prepare-sciq prepare-portfolio prepare-dataset datasets-list clean-results stop-servers promptfoo-tests server smoke-judge smoke-target eval-promptfoo eval-promptfoo-ifeval eval-deepeval eval-ragas eval-all lab lab-portfolio portfolio dashboard export-report dashboard-serve profile-export profile-import tools-update test
 
 VENV := .venv/bin
 # Default sample dataset id; override with EVAL_DATASET=<id> from `make datasets-list`
@@ -14,15 +14,6 @@ download:
 
 download-sciq:
 	$(VENV)/python scripts/download_sciq.py --split validation --limit 200
-
-download-bonsai:
-	$(VENV)/python scripts/download_bonsai.py
-
-download-qwen27:
-	$(VENV)/python scripts/download_qwen27.py
-
-download-qwen36q4:
-	$(VENV)/python scripts/download_qwen36q4.py
 
 stop-servers:
 	bash scripts/stop_model_servers.sh
@@ -52,26 +43,21 @@ prepare-portfolio: download-sciq download-realworld
 	$(VENV)/python scripts/prepare_samples.py --config ecommerce_faq --limit 25
 	$(VENV)/python scripts/prepare_samples.py --config bitext_intent --limit 25
 
+# Requires MODEL=<id> with {ID}_BASE_URL / {ID}_MODEL_NAME (or TARGET_MODEL_*) in .env
 portfolio:
-	bash scripts/run_portfolio_evals.sh $(if $(MODEL),--model $(MODEL),) $(if $(filter 1,$(SKIP_SETUP)),--skip-setup,)
-
-portfolio-bonsai-t07:
-	TARGET_TEMPERATURE=0.7 $(MAKE) portfolio MODEL=bonsai SKIP_SETUP=$(SKIP_SETUP)
-
-portfolio-qwen27-t02:
-	TARGET_TEMPERATURE=0.2 $(MAKE) portfolio-qwen27 SKIP_SETUP=$(SKIP_SETUP)
-
-portfolio-qwen27:
-	bash scripts/run_comparable_qwen_portfolio.sh $(if $(filter 1,$(SKIP_SETUP)),--skip-setup,)
+	@test -n "$(MODEL)" || (echo "Set MODEL=<id> (configured via HF import / .env)"; exit 1)
+	bash scripts/run_portfolio_evals.sh --model $(MODEL) $(if $(filter 1,$(SKIP_SETUP)),--skip-setup,)
 
 lab-portfolio:
-	bash scripts/run_lab.sh $(if $(MODEL),--model $(MODEL),) --portfolio
+	@test -n "$(MODEL)" || (echo "Set MODEL=<id>"; exit 1)
+	bash scripts/run_lab.sh --model $(MODEL) --portfolio
 
 PROMPTFOO_LIMIT ?= 25
 
 promptfoo-tests:
 	$(VENV)/python scripts/jsonl_to_promptfoo.py --config $(EVAL_DATASET) --limit $(PROMPTFOO_LIMIT)
 
+# Requires LLAMA_HF_MODEL=org/Model-GGUF:quant
 server:
 	@if ss -tln 2>/dev/null | grep -q ':8080 '; then \
 		echo "llama-server already running on :8080 (skip make server)"; \
@@ -79,25 +65,8 @@ server:
 	fi
 	bash models/start-server.sh
 
-server-bonsai:
-	@if ss -tln 2>/dev/null | grep -q ':8081 '; then \
-		echo "Bonsai server already running on :8081 (skip)"; \
-		exit 0; \
-	fi
-	bash models/start-bonsai-server.sh
-
-server-qwen27:
-	@if ss -tln 2>/dev/null | grep -q ':8082 '; then \
-		echo "Qwen server already running on :8082 (skip)"; \
-		exit 0; \
-	fi
-	bash models/start-qwen27-server.sh
-
 smoke-target:
 	$(VENV)/python scripts/smoke_target.py
-
-smoke-bonsai:
-	$(VENV)/python scripts/smoke_bonsai.py
 
 smoke-judge:
 	$(VENV)/python scripts/smoke_judge.py
@@ -108,7 +77,6 @@ smoke-judge-glm:
 smoke-judge-openrouter:
 	JUDGE_PROVIDER=openrouter $(VENV)/python scripts/smoke_judge.py
 
-# Compare Gemma (:8080) vs Bonsai Q1 (:8081) — both servers must be running
 eval-promptfoo: promptfoo-tests
 	EVAL_DATASET=$(EVAL_DATASET) $(VENV)/python scripts/run_promptfoo_eval.py
 
@@ -122,16 +90,18 @@ eval-deepeval:
 eval-ragas:
 	EVAL_DATASET=$(EVAL_DATASET) $(VENV)/python eval/ragas/run.py --config $(EVAL_DATASET) --limit 50
 
-# MODEL=gemma|bonsai|gemma,bonsai (default: both)
+# MODEL=<id> required (comma-separated for multiple)
 MODEL ?=
 
-# Full pipeline: prepare + all frameworks × all target models
+# Full pipeline: prepare + all frameworks × target models
 eval-all:
-	bash scripts/run_all_evals.sh $(if $(MODEL),--model $(MODEL),)
+	@test -n "$(MODEL)" || (echo "Set MODEL=<id>[,id2]"; exit 1)
+	bash scripts/run_all_evals.sh --model $(MODEL)
 
-# ONE command: servers + eval-all + dashboard (blocks on :3000)
+# ONE command: servers + eval-all + dashboard
 lab:
-	bash scripts/run_lab.sh $(if $(MODEL),--model $(MODEL),)
+	@test -n "$(MODEL)" || (echo "Set MODEL=<id>"; exit 1)
+	bash scripts/run_lab.sh --model $(MODEL)
 
 dashboard:
 	EVAL_DATASET=$(EVAL_DATASET) $(VENV)/python scripts/build_dashboard.py
@@ -146,7 +116,7 @@ dashboard-serve:
 profile-export:
 	$(VENV)/python scripts/profile_cli.py export --name $(NAME) $(if $(OUT),--out $(OUT),)
 
-# profile-import: PROFILE=profiles/examples/bonsai-sciq-t07.yaml
+# profile-import: PROFILE=path/to/profile.yaml
 profile-import:
 	$(VENV)/python scripts/profile_cli.py import --profile $(PROFILE)
 
