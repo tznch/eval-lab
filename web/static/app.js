@@ -39,6 +39,21 @@ function labApp() {
     setupRunMessage: "",
     _readinessTimer: null,
 
+    hfRepo: "",
+    hfGgufFiles: [],
+    hfFilename: "",
+    hfModelId: "",
+    hfDatasetId: "",
+    hfSplit: "train",
+    hfLocalId: "",
+    hfQuestionCol: "",
+    hfAnswerCol: "",
+    hfContextCol: "",
+    hfLimit: 200,
+    hfJob: null,
+    hfMessage: "",
+    _hfJobTimer: null,
+
     async init() {
       this.filtersOpen = localStorage.getItem(FILTERS_OPEN_KEY) === "1";
       this.readUrl();
@@ -343,6 +358,124 @@ function labApp() {
         status.textContent = error instanceof Error ? error.message : "Import failed";
       } finally {
         input.value = "";
+      }
+    },
+
+    async listHfGguf() {
+      if (!this.hfRepo) {
+        this.hfMessage = "Enter a HuggingFace model repository";
+        return;
+      }
+      this.hfMessage = "Listing GGUF files…";
+      try {
+        const resp = await fetch("/api/hf/models/list-files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repo_id: this.hfRepo }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.message || "Could not list GGUF files");
+        }
+        this.hfGgufFiles = Array.isArray(data.files) ? data.files : [];
+        this.hfFilename = this.hfGgufFiles[0] || "";
+        this.hfMessage = this.hfGgufFiles.length
+          ? `${this.hfGgufFiles.length} GGUF file(s) found`
+          : "No GGUF files found";
+      } catch (error) {
+        this.hfGgufFiles = [];
+        this.hfFilename = "";
+        this.hfMessage = error instanceof Error ? error.message : "Could not list GGUF files";
+      }
+    },
+
+    async downloadHfModel() {
+      if (!this.hfRepo || !this.hfFilename || this.hfJob?.status === "running") return;
+      const body = {
+        repo_id: this.hfRepo,
+        filename: this.hfFilename,
+      };
+      if (this.hfModelId) body.model_id = this.hfModelId;
+      this.hfMessage = "Starting model download…";
+      try {
+        const resp = await fetch("/api/hf/models/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.message || "Could not start model download");
+        }
+        this.hfJob = data.job || { status: "running" };
+        this.hfMessage = data.message || "Model download started";
+        await this.pollHfJob();
+      } catch (error) {
+        this.hfMessage = error instanceof Error ? error.message : "Could not start model download";
+      }
+    },
+
+    async importHfDataset() {
+      if (
+        !this.hfDatasetId ||
+        !this.hfSplit ||
+        !this.hfLocalId ||
+        !this.hfQuestionCol ||
+        !this.hfAnswerCol ||
+        this.hfJob?.status === "running"
+      ) {
+        return;
+      }
+      const body = {
+        hf_id: this.hfDatasetId,
+        split: this.hfSplit,
+        local_id: this.hfLocalId,
+        question_col: this.hfQuestionCol,
+        answer_col: this.hfAnswerCol,
+        limit: Number(this.hfLimit) || 200,
+      };
+      if (this.hfContextCol) body.context_col = this.hfContextCol;
+      this.hfMessage = "Starting dataset import…";
+      try {
+        const resp = await fetch("/api/hf/datasets/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.message || "Could not start dataset import");
+        }
+        this.hfJob = data.job || { status: "running" };
+        this.hfMessage = data.message || "Dataset import started";
+        await this.pollHfJob();
+      } catch (error) {
+        this.hfMessage = error instanceof Error ? error.message : "Could not start dataset import";
+      }
+    },
+
+    async pollHfJob() {
+      if (this._hfJobTimer) {
+        clearTimeout(this._hfJobTimer);
+        this._hfJobTimer = null;
+      }
+      const previousStatus = this.hfJob?.status;
+      try {
+        const resp = await fetch("/api/hf/jobs/current");
+        if (!resp.ok) throw new Error("Could not load HuggingFace job status");
+        const job = await resp.json();
+        this.hfJob = job;
+        if (job.message) this.hfMessage = job.message;
+        if (job.status === "running") {
+          this._hfJobTimer = setTimeout(() => this.pollHfJob(), 2000);
+        } else if (job.status === "complete" && previousStatus === "running" && this.setupHasProfile) {
+          await this.loadSetupPanel();
+        }
+      } catch (error) {
+        this.hfMessage = error instanceof Error ? error.message : "Could not load HuggingFace job status";
+        if (previousStatus === "running") {
+          this._hfJobTimer = setTimeout(() => this.pollHfJob(), 2000);
+        }
       }
     },
 

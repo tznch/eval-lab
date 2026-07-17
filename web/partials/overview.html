@@ -62,6 +62,147 @@
     </button>
     <span id="profile-action-status" class="meta" aria-live="polite"></span>
   </p>
+  <div class="hf-import-form" x-init="pollHfJob()">
+    <h4 class="hf-import-heading">Add from HuggingFace</h4>
+
+    <form class="hf-form-section" @submit.prevent="downloadHfModel()">
+      <h5>Model</h5>
+      <div class="ctrl-row ctrl-row-stack">
+        <label class="ctrl-label" for="hf-model-repo">Repository</label>
+        <input id="hf-model-repo"
+               class="secret-input"
+               type="text"
+               placeholder="org/model"
+               autocomplete="off"
+               spellcheck="false"
+               x-model.trim="hfRepo">
+      </div>
+      <p class="meta action-row">
+        <button type="button"
+                class="btn secondary"
+                id="btn-hf-list-files"
+                :disabled="hfJob?.status === 'running'"
+                @click="listHfGguf()">List GGUF files</button>
+      </p>
+      <div class="ctrl-row ctrl-row-stack">
+        <label class="ctrl-label" for="hf-model-file">GGUF file</label>
+        <select id="hf-model-file"
+                class="run-select hf-form-control"
+                x-model="hfFilename"
+                :disabled="!hfGgufFiles.length">
+          <option value="">Select a file</option>
+          <template x-for="filename in hfGgufFiles" :key="filename">
+            <option :value="filename" x-text="filename"></option>
+          </template>
+        </select>
+      </div>
+      <div class="ctrl-row ctrl-row-stack">
+        <label class="ctrl-label" for="hf-model-id">Local model id (optional)</label>
+        <input id="hf-model-id"
+               class="secret-input"
+               type="text"
+               placeholder="my-model"
+               autocomplete="off"
+               spellcheck="false"
+               x-model.trim="hfModelId">
+      </div>
+      <p class="meta action-row">
+        <button type="submit"
+                class="btn"
+                id="btn-hf-download-model"
+                :disabled="!hfRepo || !hfFilename || hfJob?.status === 'running'">Download model</button>
+      </p>
+    </form>
+
+    <form class="hf-form-section" @submit.prevent="importHfDataset()">
+      <h5>Dataset</h5>
+      <div class="hf-form-grid">
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-dataset-id">HuggingFace id</label>
+          <input id="hf-dataset-id"
+                 class="secret-input"
+                 type="text"
+                 placeholder="org/dataset"
+                 autocomplete="off"
+                 spellcheck="false"
+                 x-model.trim="hfDatasetId">
+        </div>
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-dataset-split">Split</label>
+          <input id="hf-dataset-split"
+                 class="secret-input"
+                 type="text"
+                 x-model.trim="hfSplit">
+        </div>
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-dataset-local-id">Local id</label>
+          <input id="hf-dataset-local-id"
+                 class="secret-input"
+                 type="text"
+                 placeholder="my-dataset"
+                 autocomplete="off"
+                 spellcheck="false"
+                 x-model.trim="hfLocalId">
+        </div>
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-question-column">Question column</label>
+          <input id="hf-question-column"
+                 class="secret-input"
+                 type="text"
+                 placeholder="question"
+                 autocomplete="off"
+                 spellcheck="false"
+                 x-model.trim="hfQuestionCol">
+        </div>
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-answer-column">Answer column</label>
+          <input id="hf-answer-column"
+                 class="secret-input"
+                 type="text"
+                 placeholder="answer"
+                 autocomplete="off"
+                 spellcheck="false"
+                 x-model.trim="hfAnswerCol">
+        </div>
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-context-column">Context column (optional)</label>
+          <input id="hf-context-column"
+                 class="secret-input"
+                 type="text"
+                 placeholder="context"
+                 autocomplete="off"
+                 spellcheck="false"
+                 x-model.trim="hfContextCol">
+        </div>
+        <div class="ctrl-row ctrl-row-stack">
+          <label class="ctrl-label" for="hf-dataset-limit">Limit</label>
+          <input id="hf-dataset-limit"
+                 class="secret-input"
+                 type="number"
+                 min="1"
+                 step="1"
+                 x-model.number="hfLimit">
+        </div>
+      </div>
+      <p class="meta action-row">
+        <button type="submit"
+                class="btn"
+                id="btn-hf-import-dataset"
+                :disabled="!hfDatasetId || !hfSplit || !hfLocalId || !hfQuestionCol || !hfAnswerCol || hfJob?.status === 'running'">
+          Import dataset
+        </button>
+      </p>
+    </form>
+
+    <p id="hf-job-status"
+       class="hf-job-status meta"
+       :class="{ ok: hfJob?.status === 'complete', fail: hfJob?.status === 'error' }"
+       aria-live="polite">
+      <strong x-show="hfJob?.status && hfJob.status !== 'idle'"
+              x-text="hfJob?.status === 'running' ? 'Working…' : hfJob.status"></strong>
+      <span x-text="hfMessage"></span>
+    </p>
+  </div>
 </section>
 
 {% if setup.has_profile %}

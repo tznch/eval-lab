@@ -115,6 +115,25 @@ h3 { margin: 0 0 .5rem; text-wrap: pretty; }
 .meta { color: var(--muted); font-size: .85rem; }
 .action-row { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .setup-card .action-row { margin-top: .75rem; }
+.hf-import-form { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.hf-import-heading { margin-bottom: .75rem; font-size: 1rem; color: var(--text); }
+.hf-form-section {
+  display: flex; flex-direction: column; gap: .75rem;
+  margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 8px;
+}
+.hf-form-section h5 { margin: 0; font-size: .95rem; }
+.hf-form-section .action-row { margin: 0; }
+.hf-form-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .75rem;
+}
+.hf-form-grid .secret-input, .hf-form-control { width: 100%; }
+.hf-job-status {
+  min-height: 2.5rem; margin: 1rem 0 0; padding: .65rem .75rem;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.hf-job-status strong { margin-right: .35rem; text-transform: capitalize; }
+.hf-job-status.ok { border-color: var(--pass); color: var(--pass); }
+.hf-job-status.fail { border-color: var(--fail); color: var(--fail); }
 .run-eval-card .ctrl-row { margin-top: .85rem; }
 .run-select {
   background: var(--card); color: var(--text); border: 1px solid var(--border);

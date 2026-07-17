@@ -84,6 +84,31 @@ def test_overview_uses_view_links_and_setup():
     assert "Import profile YAML" in html
 
 
+def test_overview_has_huggingface_import_forms():
+    client = TestClient(create_app())
+    r = client.get("/partials/overview")
+    assert r.status_code == 200
+    html = r.text
+    assert "Add from HuggingFace" in html
+    for element_id in (
+        "hf-model-repo",
+        "btn-hf-list-files",
+        "hf-model-file",
+        "hf-model-id",
+        "btn-hf-download-model",
+        "hf-dataset-id",
+        "hf-dataset-split",
+        "hf-dataset-local-id",
+        "hf-question-column",
+        "hf-answer-column",
+        "hf-context-column",
+        "hf-dataset-limit",
+        "btn-hf-import-dataset",
+        "hf-job-status",
+    ):
+        assert f'id="{element_id}"' in html
+
+
 def test_promptfoo_partial_has_in_page_panels():
     client = TestClient(create_app())
     r = client.get("/partials/promptfoo")
