@@ -113,7 +113,7 @@ On success, upsert `.env` keys (do not overwrite unrelated keys):
 - `{MODEL_ID}_MODEL_NAME={stem of gguf}`
 - `{MODEL_ID}_MODEL_PATH=data/models/{model_id}/{filename}`
 
-Port selection: first free port in `8080–8090` (or document fixed default `8080` if none listening — implementation should probe).
+Port selection: probe `8080–8090` and assign the first free port to `{MODEL_ID}_BASE_URL`. If all are busy, fail the job with a clear message (user can edit `.env` manually).
 
 Also update process env so readiness sees the new model without restart when possible.
 
@@ -124,13 +124,13 @@ Legacy **Download model (example)** may remain as a convenience that calls the s
 ### UI
 
 1. HF dataset id (`allenai/sciq`).
-2. Split (default `train` or `validation` — UI default `train`, user-editable).
+2. Split (UI default `train`, user-editable).
 3. Local id for `datasets/{id}/` (default: last path segment of HF id).
 4. Mapping:
    - `question` (required)
    - `ground_truth` (required; UI label “answer”)
    - `context` (optional)
-5. Limit (default e.g. `200`) for download + prepare.
+5. Limit (UI default `200`) for download + prepare.
 6. **Import** → job.
 
 ### Job steps
