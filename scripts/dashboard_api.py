@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import Body, FastAPI, Request
@@ -31,7 +33,8 @@ from shared.reporting.dashboard_views import (
     build_report_view,
     load_catalog,
 )
-from shared.reporting.run_status import read_status
+from shared.reporting.run_status import read_status, stop_run
+from shared.setup.readiness import check_readiness, has_env_profile, setup_options
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
@@ -83,6 +86,29 @@ class ProfileExportPayload(BaseModel):
     dataset: str | None = None
     temperature: float | None = None
     models: list[str] | None = None
+
+
+class EvalRunPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_id: str
+    temperature: float
+    frameworks: list[str]
+    dataset_ids: list[str] | None = None
+    dataset_id: str | None = None  # legacy single-dataset alias
+
+    def resolved_datasets(self) -> list[str]:
+        ids = [d for d in (self.dataset_ids or []) if d]
+        if not ids and self.dataset_id:
+            ids = [self.dataset_id]
+        # preserve order, unique
+        seen: set[str] = set()
+        out: list[str] = []
+        for d in ids:
+            if d not in seen:
+                seen.add(d)
+                out.append(d)
+        return out
 
 
 def _safe_profile_filename(name: str) -> str:
@@ -227,6 +253,13 @@ def create_app() -> FastAPI:
             profile = load_profile_yaml(text)
             # Also reject secrets that appear as YAML keys after parse
             write_env_profile(profile, ROOT / ".env.profile")
+            load_project_env()
+            model_id = profile.models[0].id if profile.models else "bonsai"
+            readiness = check_readiness(
+                model_id=model_id,
+                dataset_ids=[profile.dataset],
+                frameworks=["promptfoo", "deepeval", "ragas"],
+            )
         except ValueError as exc:
             return JSONResponse(
                 {"ok": False, "message": str(exc)},
@@ -250,8 +283,163 @@ def create_app() -> FastAPI:
                 "name": profile.name,
                 "dataset": profile.dataset,
                 "models": [m.id for m in profile.models],
+                "readiness": readiness,
             }
         )
+
+    @app.get("/api/setup/options")
+    def api_setup_options() -> JSONResponse:
+        load_project_env()
+        return JSONResponse(setup_options())
+
+    @app.get("/api/setup/readiness")
+    def api_setup_readiness(
+        model: str = "bonsai",
+        dataset: str = "",
+        datasets: str = "",
+        frameworks: str = "promptfoo,deepeval,ragas",
+    ) -> JSONResponse:
+        load_project_env()
+        fw = [f.strip() for f in frameworks.split(",") if f.strip()]
+        ds_list = [d.strip() for d in datasets.split(",") if d.strip()]
+        if not ds_list and dataset:
+            ds_list = [d.strip() for d in dataset.split(",") if d.strip()]
+        if not ds_list:
+            ds_list = ["sciq"]
+        result = check_readiness(model_id=model, dataset_ids=ds_list, frameworks=fw)
+        return JSONResponse(result)
+
+    @app.post("/api/evals/run")
+    def api_evals_run(payload: dict = Body(...)) -> JSONResponse:
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Secret keys not allowed in body: "
+                        + ", ".join(bad_keys)
+                    ),
+                    "blocking": [],
+                },
+                status_code=400,
+            )
+
+        try:
+            body = EvalRunPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Invalid request body: model_id, dataset_ids (or dataset_id), "
+                        "temperature, and frameworks are required"
+                    ),
+                    "blocking": [],
+                },
+                status_code=400,
+            )
+
+        dataset_ids = body.resolved_datasets()
+        if not dataset_ids:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": "Select at least one dataset",
+                    "blocking": ["No datasets selected"],
+                },
+                status_code=400,
+            )
+
+        if not body.frameworks:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": "Select at least one framework",
+                    "blocking": ["No frameworks selected"],
+                },
+                status_code=400,
+            )
+
+        valid = {"promptfoo", "deepeval", "ragas"}
+        unknown = [f for f in body.frameworks if f not in valid]
+        if unknown:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": f"Unknown frameworks: {', '.join(unknown)}",
+                    "blocking": unknown,
+                },
+                status_code=400,
+            )
+
+        load_project_env()
+        readiness = check_readiness(
+            model_id=body.model_id,
+            dataset_ids=dataset_ids,
+            frameworks=body.frameworks,
+        )
+        if not readiness["can_run"]:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": "Not ready to run eval",
+                    "blocking": readiness["blocking"],
+                },
+                status_code=400,
+            )
+
+        status = read_status() or {}
+        if status.get("status") == "running":
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": "An eval is already running",
+                    "blocking": ["Eval already in progress"],
+                },
+                status_code=409,
+            )
+
+        log_path = ROOT / "results" / "logs" / "dashboard-eval.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = log_path.open("ab")
+        cmd = [
+            sys.executable,
+            str(ROOT / "scripts" / "run_dashboard_eval.py"),
+            "--model-id",
+            body.model_id,
+            "--temperature",
+            str(body.temperature),
+            "--frameworks",
+            ",".join(body.frameworks),
+        ]
+        for ds in dataset_ids:
+            cmd.extend(["--dataset-id", ds])
+        proc = subprocess.Popen(
+            cmd,
+            cwd=ROOT,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        log_file.close()
+
+        return JSONResponse(
+            {
+                "ok": True,
+                "message": "Eval started",
+                "pid": proc.pid,
+                "dataset_ids": dataset_ids,
+            },
+            status_code=202,
+        )
+
+    @app.post("/api/evals/stop")
+    def api_evals_stop() -> JSONResponse:
+        result = stop_run()
+        if not result["ok"]:
+            return JSONResponse(result, status_code=409)
+        return JSONResponse(result)
 
     @app.post("/api/profiles/export")
     def api_profiles_export(payload: dict | None = Body(default=None)) -> JSONResponse:
@@ -329,7 +517,13 @@ def create_app() -> FastAPI:
     def partial_overview(request: Request) -> HTMLResponse:
         catalog, filters = _filters_from_request(request)
         view = build_overview_view(catalog, filters)
-        return templates.TemplateResponse(request, "overview.html", {"view": view, "filters": filters})
+        load_project_env()
+        setup = setup_options()
+        return templates.TemplateResponse(
+            request,
+            "overview.html",
+            {"view": view, "filters": filters, "setup": setup},
+        )
 
     @app.get("/partials/report", response_class=HTMLResponse)
     def partial_report(request: Request) -> HTMLResponse:

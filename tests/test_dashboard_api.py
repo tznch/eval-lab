@@ -288,6 +288,10 @@ def test_download_calls_dispatcher(monkeypatch):
 def test_import_profile_writes_env_profile(tmp_path, monkeypatch):
     env_path = tmp_path / ".env.profile"
     monkeypatch.setattr("scripts.dashboard_api.ROOT", tmp_path)
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {"can_run": False, "blocking": ["test"], "checks": {}},
+    )
     client = TestClient(create_app())
     yaml_text = """
 name: ui-import
@@ -305,6 +309,7 @@ limits:
     body = r.json()
     assert body["ok"] is True
     assert body["dataset"] == "sciq"
+    assert "readiness" in body
     assert env_path.is_file()
     text = env_path.read_text()
     assert "EVAL_DATASET=sciq" in text
@@ -401,3 +406,315 @@ def test_export_profile_single_run_overrides(monkeypatch):
     assert "id: bonsai" in yaml_text
     assert "temperature: 0.7" in yaml_text
     assert "qwen27" not in yaml_text
+
+
+def test_setup_options_json():
+    client = TestClient(create_app())
+    r = client.get("/api/setup/options")
+    assert r.status_code == 200
+    data = r.json()
+    assert "datasets" in data
+    assert "dataset_catalog" in data
+    assert isinstance(data["dataset_catalog"], list)
+    assert data["frameworks"] == ["promptfoo", "deepeval", "ragas"]
+    # Only folders with dataset.yaml — not legacy-only ids like paper_text
+    assert "paper_text" not in data["datasets"]
+    assert "feta" not in data["datasets"]
+    if data["dataset_catalog"]:
+        row = data["dataset_catalog"][0]
+        assert {"id", "name", "description"} <= set(row)
+        assert data["datasets"] == [d["id"] for d in data["dataset_catalog"]]
+
+
+def test_setup_readiness_json(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {
+            "ok": False,
+            "can_run": False,
+            "blocking": ["missing samples"],
+            "checks": {"dataset_samples": {"ok": False, "message": "missing"}},
+        },
+    )
+    client = TestClient(create_app())
+    r = client.get("/api/setup/readiness?model=bonsai&dataset=sciq&frameworks=promptfoo")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["can_run"] is False
+    assert "checks" in data
+
+
+def test_evals_run_rejects_secrets():
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_ids": ["sciq"],
+            "temperature": 0.7,
+            "frameworks": ["promptfoo"],
+            "OPENROUTER_API_KEY": "nope",
+        },
+    )
+    assert r.status_code == 400
+    assert r.json()["ok"] is False
+
+
+def test_evals_run_rejects_no_frameworks(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {"can_run": True, "blocking": []},
+    )
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_ids": ["sciq"],
+            "temperature": 0.7,
+            "frameworks": [],
+        },
+    )
+    assert r.status_code == 400
+
+
+def test_evals_run_rejects_no_datasets(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {"can_run": True, "blocking": []},
+    )
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_ids": [],
+            "temperature": 0.7,
+            "frameworks": ["promptfoo"],
+        },
+    )
+    assert r.status_code == 400
+
+
+def test_evals_run_rejects_not_ready(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {
+            "can_run": False,
+            "blocking": ["Missing samples"],
+        },
+    )
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_ids": ["sciq"],
+            "temperature": 0.7,
+            "frameworks": ["promptfoo"],
+        },
+    )
+    assert r.status_code == 400
+    assert "blocking" in r.json()
+
+
+def test_evals_run_rejects_when_already_running(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {"can_run": True, "blocking": []},
+    )
+    monkeypatch.setattr(
+        "scripts.dashboard_api.read_status",
+        lambda: {"status": "running"},
+    )
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_ids": ["sciq"],
+            "temperature": 0.7,
+            "frameworks": ["promptfoo"],
+        },
+    )
+    assert r.status_code == 409
+
+
+def test_evals_run_starts_subprocess(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {"can_run": True, "blocking": []},
+    )
+    monkeypatch.setattr("scripts.dashboard_api.read_status", lambda: {"status": "idle"})
+    spawned = {}
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            spawned["args"] = args
+            self.pid = 4242
+
+    monkeypatch.setattr("scripts.dashboard_api.subprocess.Popen", FakePopen)
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_ids": ["sciq", "nq"],
+            "temperature": 0.7,
+            "frameworks": ["promptfoo", "ragas"],
+        },
+    )
+    assert r.status_code == 202
+    assert r.json()["ok"] is True
+    assert "run_dashboard_eval.py" in spawned["args"][1]
+    assert spawned["args"].count("--dataset-id") == 2
+    assert "sciq" in spawned["args"] and "nq" in spawned["args"]
+
+
+def test_evals_run_accepts_legacy_dataset_id(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.check_readiness",
+        lambda **kwargs: {"can_run": True, "blocking": []},
+    )
+    monkeypatch.setattr("scripts.dashboard_api.read_status", lambda: {"status": "idle"})
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            self.pid = 1
+
+    monkeypatch.setattr("scripts.dashboard_api.subprocess.Popen", FakePopen)
+    client = TestClient(create_app())
+    r = client.post(
+        "/api/evals/run",
+        json={
+            "model_id": "bonsai",
+            "dataset_id": "sciq",
+            "temperature": 0.7,
+            "frameworks": ["promptfoo"],
+        },
+    )
+    assert r.status_code == 202
+
+
+def test_setup_readiness_multi_datasets(monkeypatch):
+    seen = {}
+
+    def fake_check(**kwargs):
+        seen.update(kwargs)
+        return {
+            "ok": True,
+            "can_run": True,
+            "blocking": [],
+            "dataset_ids": kwargs.get("dataset_ids"),
+            "checks": {},
+        }
+
+    monkeypatch.setattr("scripts.dashboard_api.check_readiness", fake_check)
+    client = TestClient(create_app())
+    r = client.get(
+        "/api/setup/readiness?model=bonsai&datasets=sciq,nq&frameworks=promptfoo"
+    )
+    assert r.status_code == 200
+    assert seen["dataset_ids"] == ["sciq", "nq"]
+
+
+def test_overview_has_dataset_pills_when_profile_exists(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "shared.setup.readiness.has_env_profile",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "scripts.dashboard_api.setup_options",
+        lambda: {
+            "has_profile": True,
+            "datasets": ["sciq", "nq"],
+            "dataset_catalog": [
+                {"id": "sciq", "name": "SciQ", "topic": "Science", "description": "Science QA"},
+                {"id": "nq", "name": "NQ", "topic": "QA", "description": "Natural Questions"},
+            ],
+            "temperatures": [0.7],
+            "frameworks": ["promptfoo"],
+            "models": ["bonsai"],
+            "default_dataset": "sciq",
+            "default_datasets": ["sciq"],
+            "default_temperature": 0.7,
+            "default_model": "bonsai",
+            "limits": {},
+        },
+    )
+    client = TestClient(create_app())
+    r = client.get("/partials/overview")
+    assert r.status_code == 200
+    assert "Datasets" in r.text
+    assert "toggleSetupDataset" in r.text
+    assert "dataset-checklist" in r.text
+    assert 'type="checkbox"' in r.text
+    assert 'id="setup-dataset"' not in r.text
+
+
+def test_evals_stop_calls_stop_run(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.stop_run",
+        lambda: {"ok": True, "message": "Eval stopped", "status": {"status": "cancelled"}},
+    )
+    client = TestClient(create_app())
+    r = client.post("/api/evals/stop")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+def test_evals_stop_when_idle(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.stop_run",
+        lambda: {"ok": False, "message": "No eval is running", "status": {"status": "idle"}},
+    )
+    client = TestClient(create_app())
+    r = client.post("/api/evals/stop")
+    assert r.status_code == 409
+
+
+def test_progress_partial_shows_stop_when_running(monkeypatch):
+    monkeypatch.setattr(
+        "scripts.dashboard_api.read_status",
+        lambda: {
+            "status": "running",
+            "model": "bonsai",
+            "temp_tag": "t0.7",
+            "step": 1,
+            "total_steps": 3,
+            "completed": [],
+            "current": {"track": "sciq", "framework": "promptfoo"},
+        },
+    )
+    client = TestClient(create_app())
+    r = client.get("/partials/progress")
+    assert r.status_code == 200
+    assert "Stop eval" in r.text
+    assert '@click="stopEval()"' in r.text
+
+
+
+def test_overview_has_run_eval_when_profile_exists(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "shared.setup.readiness.has_env_profile",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "scripts.dashboard_api.setup_options",
+        lambda: {
+            "has_profile": True,
+            "datasets": ["sciq"],
+            "temperatures": [0.7],
+            "frameworks": ["promptfoo"],
+            "models": ["bonsai"],
+            "default_dataset": "sciq",
+            "default_temperature": 0.7,
+            "default_model": "bonsai",
+            "limits": {},
+        },
+    )
+    client = TestClient(create_app())
+    r = client.get("/partials/overview")
+    assert r.status_code == 200
+    assert "Run eval" in r.text
+    assert "run-eval-card" in r.text

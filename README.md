@@ -42,7 +42,7 @@ make prepare-dataset DATASET=<id> LIMIT=50
 # or: cp -r datasets/_template datasets/my_task  → edit dataset.yaml
 
 # 3. Model server (separate terminal)
-# Example helpers exist (make server / server-bonsai / …) — or start your own llama-server
+# Example helpers exist (make server-<id> / …) — or start your own llama-server
 # and set TARGET_MODEL_BASE_URL / TARGET_MODEL_NAME in .env
 
 # 4. Smoke judge
@@ -114,7 +114,7 @@ Eval runners call an OpenAI-compatible `/v1` endpoint. Configure in `.env`:
 ```bash
 TARGET_MODEL_BASE_URL=http://127.0.0.1:8080/v1
 TARGET_MODEL_NAME=<served-model-name>
-# optional extras for multi-model labs, e.g. BONSAI_* / QWEN_* on other ports
+# optional: per-model overrides — see .env.example (MODEL_BASE_URL / MODEL_NAME pattern)
 ```
 
 Convenience Make targets (`make download-*`, `make server-*`) download/start a few known GGUFs. Use them only if useful; otherwise point env at whatever you already serve.
@@ -127,7 +127,7 @@ Secret-free YAML: dataset, temperature, limits, model HF refs.
 
 ```bash
 make profile-export NAME=my-run
-make profile-import PROFILE=profiles/examples/bonsai-sciq-t07.yaml   # example only
+make profile-import PROFILE=profiles/examples/<example>.yaml
 # → writes .env.profile; does not touch API keys
 # download weights if the profile lists hf_repo, then:
 make lab MODEL=<model_id>
@@ -135,6 +135,7 @@ make lab MODEL=<model_id>
 
 Dashboard: Report shows one card per `(model, temperature)` with eval tabs; **Export profile YAML** on a card downloads that run's recipe.  
 **Import profile YAML** uploads a shared recipe into `.env.profile` (no API keys).  
+On Overview, after import (or when `.env.profile` exists), the **Run eval** panel validates model/dataset/judge readiness and starts Promptfoo / DeepEval / RAGAS in the background with your chosen temperature, dataset, and frameworks.  
 **Download model (example profile)** fetches weights for a known example.
 
 ## Update eval tools
@@ -157,12 +158,10 @@ profiles/examples/     # example shareable recipes
 scripts/               # CLI, downloads, lab runner, dashboard
 web/                   # HTMX dashboard
 results/               # outputs (gitignored)
-docs/                  # guides and notes
+docs/                  # reproduction guide
 ```
 
 ## Docs
 
-- [docs/reproduce-run.md](docs/reproduce-run.md) — example reproduction walkthrough  
-- [docs/benchmarks/comparable-baseline.md](docs/benchmarks/comparable-baseline.md) — comparing two local models fairly  
-- [docs/bonsai/bonsai-27b-whitepaper-summary.md](docs/bonsai/bonsai-27b-whitepaper-summary.md) — notes for one bundled model example  
-- `datasets/_template/README.md` — custom datasets  
+- [docs/reproduce-run.md](docs/reproduce-run.md) — comparable runs, profiles, outputs  
+- `datasets/_template/README.md` — add a custom dataset  

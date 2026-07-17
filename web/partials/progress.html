@@ -1,11 +1,13 @@
 <div id="eval-progress" class="progress-card">
   {% if status.status == 'idle' %}
-    <p class="meta">No eval running. Start with <code>make portfolio MODEL=bonsai</code>.</p>
-  {% elif status.status == 'running' %}
+    <p class="meta">No eval running. Import a profile on Overview and use <strong>Run eval</strong>, or start from the CLI.</p>
+  {% elif status.status == 'running' or status.status == 'cancelling' %}
     <div class="progress-meta">
       <strong>{{ status.model }} · {{ status.temp_tag }}</strong>
       · step {{ status.step }}/{{ status.total_steps }}
-      {% if status.current %}
+      {% if status.status == 'cancelling' %}
+        · stopping…
+      {% elif status.current %}
         · now: {{ status.current.framework }} · {{ status.current.track }}
       {% endif %}
     </div>
@@ -17,10 +19,22 @@
       {% for item in status.completed %}
         <span class="dot ok" title="{{ item.track }} · {{ item.framework }}">✓</span>
       {% endfor %}
-      {% if status.current %}
+      {% if status.current and status.status == 'running' %}
         <span class="dot active" title="in progress">◐</span>
       {% endif %}
     </div>
+    <p class="meta action-row progress-actions">
+      <button type="button"
+              class="btn secondary"
+              id="btn-stop-eval"
+              {% if status.status == 'cancelling' %}disabled{% endif %}
+              @click="stopEval()">
+        {{ 'Stopping…' if status.status == 'cancelling' else 'Stop eval' }}
+      </button>
+      <span id="stop-eval-status" class="meta" aria-live="polite"></span>
+    </p>
+  {% elif status.status == 'cancelled' %}
+    <p class="meta">Eval cancelled. Adjust settings on Overview and run again.</p>
   {% else %}
     <p class="meta">Eval {{ status.status }}.</p>
   {% endif %}

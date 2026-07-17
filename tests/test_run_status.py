@@ -38,3 +38,25 @@ def test_finish_run(tmp_path, monkeypatch):
     init_run("bonsai", "t0.7", ["sciq"], ["promptfoo"])
     finish_run("complete")
     assert read_status()["status"] == "complete"
+
+
+def test_init_run_records_pid(tmp_path, monkeypatch):
+    monkeypatch.setattr(rs, "STATUS_PATH", tmp_path / "run_status.json")
+    data = init_run("bonsai", "t0.7", ["sciq"], ["promptfoo"], pid=12345)
+    assert data["pid"] == 12345
+
+
+def test_stop_run_marks_cancelled(tmp_path, monkeypatch):
+    monkeypatch.setattr(rs, "STATUS_PATH", tmp_path / "run_status.json")
+    monkeypatch.setattr(rs, "_pid_alive", lambda _pid: False)
+    init_run("bonsai", "t0.7", ["sciq"], ["promptfoo"], pid=99999)
+    result = rs.stop_run()
+    assert result["ok"] is True
+    assert read_status()["status"] == "cancelled"
+
+
+def test_stop_run_when_idle(tmp_path, monkeypatch):
+    monkeypatch.setattr(rs, "STATUS_PATH", tmp_path / "run_status.json")
+    rs.set_idle()
+    result = rs.stop_run()
+    assert result["ok"] is False

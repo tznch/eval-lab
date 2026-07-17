@@ -226,10 +226,13 @@ def build_overview_view(catalog: dict, filters: FilterState) -> dict:
         report = json.loads(report_path.read_text(encoding="utf-8"))
         for fw in runs:
             runs[fw] = len(report.get("runs", {}).get(fw, []))
+    from shared.setup.readiness import has_env_profile
+
     return {
         "runs": runs,
         "catalog": catalog,
         "filters": filters,
+        "setup": {"has_profile": has_env_profile()},
     }
 
 

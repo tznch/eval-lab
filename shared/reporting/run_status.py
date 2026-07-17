@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -36,6 +39,8 @@ def init_run(
     temp_tag: str,
     tracks: list[str],
     frameworks: list[str],
+    *,
+    pid: int | None = None,
 ) -> dict:
     data = {
         "status": "running",
@@ -49,13 +54,93 @@ def init_run(
         "current": None,
         "completed": [],
         "errors": [],
+        "pid": pid if pid is not None else os.getpid(),
     }
     write_status(data)
     return data
 
 
+def set_run_pid(pid: int) -> dict:
+    data = read_status() or {"status": "running"}
+    data["pid"] = pid
+    write_status(data)
+    return data
+
+
+def is_cancel_requested() -> bool:
+    data = read_status()
+    return bool(data and data.get("status") == "cancelling")
+
+
+def request_cancel() -> dict:
+    data = read_status() or {}
+    data["status"] = "cancelling"
+    data["current"] = None
+    write_status(data)
+    return data
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _kill_process_tree(pid: int) -> None:
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError, OSError):
+            return
+    deadline = time.time() + 3.0
+    while time.time() < deadline and _pid_alive(pid):
+        time.sleep(0.1)
+    if not _pid_alive(pid):
+        return
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError, OSError):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+
+
+def stop_run() -> dict:
+    """Stop a running eval process and mark status cancelled."""
+    data = read_status() or {}
+    status = data.get("status")
+    if status not in ("running", "cancelling"):
+        return {"ok": False, "message": "No eval is running", "status": data}
+
+    pid = data.get("pid")
+    data["status"] = "cancelling"
+    data["current"] = None
+    write_status(data)
+
+    if isinstance(pid, int) and pid > 0 and _pid_alive(pid):
+        _kill_process_tree(pid)
+
+    finished = {
+        **data,
+        "status": "cancelled",
+        "current": None,
+    }
+    finished.pop("pid", None)
+    write_status(finished)
+    return {"ok": True, "message": "Eval stopped", "status": finished}
+
+
 def start_step(track: str, framework: str) -> dict:
     data = read_status() or init_run("unknown", "t0.2", [track], [framework])
+    if data.get("status") == "cancelling":
+        return data
     data["status"] = "running"
     data["current"] = {"track": track, "framework": framework}
     write_status(data)

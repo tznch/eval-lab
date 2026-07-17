@@ -63,3 +63,101 @@
     <span id="profile-action-status" class="meta" aria-live="polite"></span>
   </p>
 </section>
+
+{% if setup.has_profile %}
+<section class="card wide setup-card run-eval-card"
+         id="run-eval-card"
+         x-init="initSetupPanel(true)">
+  <h3>Run eval</h3>
+  <p class="meta">Validate model, dataset, and judge — then start Promptfoo / DeepEval / RAGAS in the background.</p>
+
+  <p class="meta" x-show="!setupReadiness">Loading readiness…</p>
+
+  <div class="readiness-list" x-show="setupReadiness">
+    <template x-for="(check, key) in (setupReadiness?.checks || {})" :key="key">
+      <p class="readiness-row" :class="check.ok ? 'ok' : 'fail'">
+        <span class="readiness-icon" x-text="check.ok ? '✓' : '✗'"></span>
+        <span x-text="check.message"></span>
+      </p>
+    </template>
+    <template x-if="setupReadiness && setupReadiness.blocking && setupReadiness.blocking.length">
+      <p class="meta fail-text" x-text="'Blocked: ' + setupReadiness.blocking.join('; ')"></p>
+    </template>
+  </div>
+
+  <div class="run-eval-form" x-show="setupOptions">
+    <div class="ctrl-row" x-show="(setupOptions?.models || []).length > 1">
+      <span class="ctrl-label" id="lbl-setup-model">Model</span>
+      <select class="run-select"
+              id="setup-model"
+              aria-labelledby="lbl-setup-model"
+              x-model="setupModelId"
+              @change="fetchReadiness()">
+        <template x-for="m in (setupOptions?.models || [])" :key="m">
+          <option :value="m" x-text="m"></option>
+        </template>
+      </select>
+    </div>
+
+    <div class="ctrl-row ctrl-row-stack">
+      <span class="ctrl-label" id="lbl-setup-dataset">Datasets</span>
+      <div class="dataset-checklist" role="group" aria-labelledby="lbl-setup-dataset">
+        <template x-for="d in (setupOptions?.dataset_catalog || [])" :key="d.id">
+          <label class="check-row">
+            <input type="checkbox"
+                   :value="d.id"
+                   :checked="setupDatasetIds.includes(d.id)"
+                   @change="toggleSetupDataset(d.id)">
+            <span class="check-body">
+              <span class="check-title" x-text="d.name"></span>
+              <span class="check-id" x-text="d.id"></span>
+              <span class="check-desc" x-show="d.description" x-text="d.description"></span>
+            </span>
+          </label>
+        </template>
+        <p class="meta" x-show="!(setupOptions?.dataset_catalog || []).length">
+          No datasets found. Add <code>datasets/{id}/dataset.yaml</code>.
+        </p>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label" id="lbl-setup-temp">Temperature</span>
+      <div class="pill-group" role="group" aria-labelledby="lbl-setup-temp">
+        <template x-for="t in (setupOptions?.temperatures || [])" :key="t">
+          <button type="button"
+                  class="pill"
+                  :class="setupTemperature === t && 'active'"
+                  @click="setupTemperature = t; fetchReadiness()"
+                  x-text="t"></button>
+        </template>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label" id="lbl-setup-fw">Frameworks</span>
+      <div class="pill-group" role="group" aria-labelledby="lbl-setup-fw">
+        <template x-for="fw in (setupOptions?.frameworks || [])" :key="fw">
+          <button type="button"
+                  class="pill"
+                  :class="setupFrameworks.includes(fw) && 'active'"
+                  @click="toggleSetupFramework(fw)"
+                  x-text="fw"></button>
+        </template>
+      </div>
+    </div>
+
+    <p class="meta action-row">
+      <button type="button"
+              class="btn"
+              id="btn-run-eval"
+              :disabled="!setupCanRun || setupRunning"
+              @click="runEval()">
+        <span x-text="setupRunning ? 'Running…' : 'Run eval'"></span>
+      </button>
+      <span id="run-eval-status" class="meta" aria-live="polite" x-text="setupRunMessage"></span>
+    </p>
+    <p class="meta">Progress updates in the panel above.</p>
+  </div>
+</section>
+{% endif %}

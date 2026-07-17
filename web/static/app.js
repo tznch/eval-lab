@@ -27,6 +27,18 @@ function labApp() {
     filtersOpen: false,
     filters: { models: [], temps: [], dataset: "all", frameworks: [] },
 
+    setupHasProfile: false,
+    setupOptions: null,
+    setupReadiness: null,
+    setupModelId: "",
+    setupDatasetIds: [],
+    setupTemperature: 0.7,
+    setupFrameworks: ["promptfoo", "deepeval", "ragas"],
+    setupCanRun: false,
+    setupRunning: false,
+    setupRunMessage: "",
+    _readinessTimer: null,
+
     async init() {
       this.filtersOpen = localStorage.getItem(FILTERS_OPEN_KEY) === "1";
       this.readUrl();
@@ -37,6 +49,10 @@ function labApp() {
       document.body.addEventListener("htmx:afterSwap", (e) => {
         if (e.detail?.target?.id === "main-content") {
           if (window.Alpine) Alpine.initTree(e.detail.target);
+          const root = Alpine.$data(document.body);
+          if (root && document.getElementById("run-eval-card") && !document.getElementById("run-eval-card").hidden) {
+            root.loadSetupPanel();
+          }
           const respUrl = e.detail.xhr?.responseURL;
           if (respUrl && window.Alpine) {
             const panel = new URL(respUrl).searchParams.get("panel");
@@ -44,6 +60,14 @@ function labApp() {
             if (root && panel) root.contentPanel = panel;
           }
           window.scrollTo(0, 0);
+        }
+        if (e.detail?.target?.id === "progress-panel" && window.Alpine) {
+          Alpine.initTree(e.detail.target);
+          const root = Alpine.$data(document.body);
+          const runStatus = e.detail.xhr?.responseText || "";
+          if (root) {
+            root.setupRunning = runStatus.includes("Stop eval") || runStatus.includes("Stopping");
+          }
         }
       });
       try {
@@ -309,10 +333,163 @@ function labApp() {
           throw new Error(data.message || "Import failed");
         }
         status.textContent = data.message || "Imported";
+        this.setupHasProfile = true;
+        if (this.view === "overview") {
+          this.reloadMain({ skipUrl: true });
+        } else {
+          await this.loadSetupPanel();
+        }
       } catch (error) {
         status.textContent = error instanceof Error ? error.message : "Import failed";
       } finally {
         input.value = "";
+      }
+    },
+
+    initSetupPanel(hasProfile) {
+      if (hasProfile) {
+        this.setupHasProfile = true;
+        this.loadSetupPanel();
+      }
+    },
+
+    async loadSetupPanel() {
+      try {
+        const resp = await fetch("/api/setup/options");
+        if (!resp.ok) return;
+        const options = await resp.json();
+        this.setupOptions = options;
+        this.setupHasProfile = Boolean(options.has_profile);
+        this.setupModelId = options.default_model || options.models?.[0] || "bonsai";
+        const catalogIds = (options.dataset_catalog || []).map((d) => d.id);
+        const known = catalogIds.length ? catalogIds : options.datasets || [];
+        const defaults = options.default_datasets?.length
+          ? options.default_datasets
+          : [options.default_dataset || known[0] || "sciq"];
+        this.setupDatasetIds = defaults.filter((d) => known.includes(d));
+        if (!this.setupDatasetIds.length && known.length) {
+          this.setupDatasetIds = [known[0]];
+        }
+        this.setupTemperature = options.default_temperature ?? 0.7;
+        this.setupFrameworks = options.frameworks?.slice() || ["promptfoo", "deepeval", "ragas"];
+        await this.fetchReadiness();
+      } catch (err) {
+        console.warn("setup panel load failed", err);
+      }
+    },
+
+    fetchReadiness() {
+      if (this._readinessTimer) clearTimeout(this._readinessTimer);
+      return new Promise((resolve) => {
+        this._readinessTimer = setTimeout(async () => {
+          await this._fetchReadinessNow();
+          resolve();
+        }, 200);
+      });
+    },
+
+    async _fetchReadinessNow() {
+      if (!this.setupModelId || !this.setupDatasetIds.length) {
+        this.setupCanRun = false;
+        return;
+      }
+      const params = new URLSearchParams({
+        model: this.setupModelId,
+        datasets: this.setupDatasetIds.join(","),
+        frameworks: this.setupFrameworks.join(","),
+      });
+      try {
+        const resp = await fetch(`/api/setup/readiness?${params}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        this.setupReadiness = data;
+        this.setupCanRun = Boolean(data.can_run);
+        const status = await fetch("/api/run-status");
+        if (status.ok) {
+          const run = await status.json();
+          this.setupRunning = run.status === "running" || run.status === "cancelling";
+        }
+      } catch (err) {
+        console.warn("readiness fetch failed", err);
+      }
+    },
+
+    toggleSetupDataset(ds) {
+      const list = this.setupDatasetIds;
+      const idx = list.indexOf(ds);
+      if (idx >= 0) {
+        if (list.length > 1) list.splice(idx, 1);
+      } else {
+        list.push(ds);
+      }
+      this.fetchReadiness();
+    },
+
+    toggleSetupFramework(fw) {
+      const list = this.setupFrameworks;
+      const idx = list.indexOf(fw);
+      if (idx >= 0) {
+        if (list.length > 1) list.splice(idx, 1);
+      } else {
+        list.push(fw);
+      }
+      this.fetchReadiness();
+    },
+
+    async runEval() {
+      if (!this.setupCanRun || this.setupRunning) return;
+      this.setupRunning = true;
+      this.setupRunMessage = "Starting eval…";
+      try {
+        const resp = await fetch("/api/evals/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model_id: this.setupModelId,
+            dataset_ids: this.setupDatasetIds,
+            temperature: this.setupTemperature,
+            frameworks: this.setupFrameworks,
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          const blockers = data.blocking?.length ? ` (${data.blocking.join("; ")})` : "";
+          throw new Error((data.message || "Run failed") + blockers);
+        }
+        this.setupRunMessage = data.message || "Eval started";
+        const progress = document.getElementById("progress-panel");
+        if (progress && typeof htmx !== "undefined") {
+          htmx.trigger(progress, "load");
+        }
+      } catch (error) {
+        this.setupRunMessage = error instanceof Error ? error.message : "Run failed";
+        this.setupRunning = false;
+      }
+    },
+
+    async stopEval() {
+      const statusEl = document.getElementById("stop-eval-status");
+      const button = document.getElementById("btn-stop-eval");
+      if (button) button.disabled = true;
+      if (statusEl) statusEl.textContent = "Stopping…";
+      try {
+        const resp = await fetch("/api/evals/stop", { method: "POST" });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.message || "Stop failed");
+        }
+        if (statusEl) statusEl.textContent = data.message || "Stopped";
+        this.setupRunning = false;
+        this.setupRunMessage = "Eval stopped";
+        const progress = document.getElementById("progress-panel");
+        if (progress && typeof htmx !== "undefined") {
+          htmx.trigger(progress, "load");
+        }
+      } catch (error) {
+        if (statusEl) {
+          statusEl.textContent = error instanceof Error ? error.message : "Stop failed";
+        }
+        if (button) button.disabled = false;
       }
     },
   };

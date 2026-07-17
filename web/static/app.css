@@ -115,6 +115,50 @@ h3 { margin: 0 0 .5rem; text-wrap: pretty; }
 .meta { color: var(--muted); font-size: .85rem; }
 .action-row { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .setup-card .action-row { margin-top: .75rem; }
+.run-eval-card .ctrl-row { margin-top: .85rem; }
+.run-select {
+  background: var(--card); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: .4rem .65rem; font-size: .85rem; min-width: 10rem;
+}
+.ctrl-row-stack {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: .5rem;
+}
+.dataset-checklist {
+  width: 100%;
+  max-height: 16rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  padding: .35rem 0;
+}
+.check-row {
+  display: flex;
+  gap: .65rem;
+  align-items: flex-start;
+  padding: .55rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.check-row:hover { border-color: var(--accent); }
+.check-row input {
+  margin-top: .2rem;
+  flex-shrink: 0;
+}
+.check-body { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.check-title { font-weight: 600; color: var(--text); }
+.check-id { font-size: .75rem; color: var(--muted); font-family: ui-monospace, monospace; }
+.check-desc { font-size: .82rem; color: var(--muted); line-height: 1.35; }
+.readiness-list { margin: .75rem 0 1rem; }
+.readiness-row { margin: .25rem 0; font-size: .88rem; display: flex; gap: .5rem; align-items: baseline; }
+.readiness-row.ok { color: var(--pass); }
+.readiness-row.fail { color: var(--fail, #e57373); }
+.readiness-icon { font-weight: 700; min-width: 1rem; }
+.fail-text { color: var(--fail, #e57373); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn {
   display: inline-block; margin-top: .75rem; padding: .6rem 1rem;
   background: var(--accent); color: #fff; border-radius: 8px;
@@ -122,6 +166,7 @@ h3 { margin: 0 0 .5rem; text-wrap: pretty; }
 }
 .action-row .btn { margin-top: 0; }
 .progress-meta { margin-bottom: .75rem; font-size: .95rem; }
+.progress-actions { margin-top: .85rem; }
 .bar-track {
   height: 12px; background: var(--border); border-radius: 6px; overflow: hidden;
 }
