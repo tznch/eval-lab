@@ -1,5 +1,6 @@
 """Tests for HuggingFace dashboard API routes."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from scripts.dashboard_api import create_app
@@ -38,6 +39,92 @@ def test_download_409_when_job_running(monkeypatch):
 
     assert response.status_code == 409
     assert response.json()["ok"] is False
+
+
+@pytest.mark.parametrize(
+    ("route", "payload"),
+    [
+        (
+            "/api/hf/models/download",
+            {"repo_id": "org/x", "filename": "a.gguf"},
+        ),
+        (
+            "/api/hf/datasets/import",
+            {
+                "hf_id": "org/data",
+                "split": "train",
+                "local_id": "local",
+                "question_col": "question",
+                "answer_col": "answer",
+            },
+        ),
+    ],
+)
+def test_start_job_race_returns_409(monkeypatch, route, payload):
+    monkeypatch.setattr("scripts.dashboard_api.is_job_running", lambda: False)
+
+    def raise_running(**kwargs):
+        raise RuntimeError("An HF job is already running")
+
+    monkeypatch.setattr("scripts.dashboard_api.start_job", raise_running)
+
+    response = TestClient(create_app()).post(route, json=payload)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "ok": False,
+        "message": "An HF job is already running",
+    }
+
+
+@pytest.mark.parametrize(
+    ("route", "payload"),
+    [
+        (
+            "/api/hf/models/download",
+            {"repo_id": "org/x", "filename": "a.gguf"},
+        ),
+        (
+            "/api/hf/datasets/import",
+            {
+                "hf_id": "org/data",
+                "split": "train",
+                "local_id": "local",
+                "question_col": "question",
+                "answer_col": "answer",
+            },
+        ),
+    ],
+)
+def test_spawn_failure_finishes_job_with_error(
+    tmp_path, monkeypatch, route, payload
+):
+    monkeypatch.setattr("scripts.dashboard_api.ROOT", tmp_path)
+    monkeypatch.setattr("scripts.dashboard_api.is_job_running", lambda: False)
+    monkeypatch.setattr(
+        "scripts.dashboard_api.start_job",
+        lambda **kwargs: {"id": "1", "status": "running"},
+    )
+    finished = {}
+
+    def fake_finish_job(**kwargs):
+        finished.update(kwargs)
+        return {"id": "1", **kwargs}
+
+    def fail_spawn(*args, **kwargs):
+        raise OSError("spawn failed")
+
+    monkeypatch.setattr("scripts.dashboard_api.finish_job", fake_finish_job)
+    monkeypatch.setattr("scripts.dashboard_api.subprocess.Popen", fail_spawn)
+
+    response = TestClient(create_app()).post(route, json=payload)
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "ok": False,
+        "message": "Failed to start HF job: spawn failed",
+    }
+    assert finished == {"status": "error", "message": "spawn failed"}
 
 
 def test_download_starts_job_before_spawning(monkeypatch):

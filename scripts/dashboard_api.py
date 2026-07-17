@@ -23,7 +23,7 @@ from shared.profiles.io import (
     write_env_profile,
 )
 from shared.hf_import.models import list_gguf_files
-from shared.hf_jobs import is_job_running, read_job, start_job
+from shared.hf_jobs import finish_job, is_job_running, read_job, start_job
 from shared.reporting.dashboard_filters import parse_filter_params
 from shared.reporting.dashboard_views import (
     build_deepeval_groups,
@@ -237,12 +237,15 @@ def create_app() -> FastAPI:
                 status_code=409,
             )
 
-        job = start_job(
-            kind="model_download", message="Starting model download"
-        )
-        log_path = ROOT / "results" / "logs" / "dashboard-hf.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = log_path.open("ab")
+        try:
+            job = start_job(
+                kind="model_download", message="Starting model download"
+            )
+        except RuntimeError:
+            return JSONResponse(
+                {"ok": False, "message": "An HF job is already running"},
+                status_code=409,
+            )
         cmd = [
             sys.executable,
             str(ROOT / "scripts" / "run_hf_job.py"),
@@ -254,14 +257,26 @@ def create_app() -> FastAPI:
         ]
         if body.model_id is not None:
             cmd.extend(["--model-id", body.model_id])
-        subprocess.Popen(
-            cmd,
-            cwd=ROOT,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        log_file.close()
+        try:
+            log_path = ROOT / "results" / "logs" / "dashboard-hf.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("ab") as log_file:
+                subprocess.Popen(
+                    cmd,
+                    cwd=ROOT,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+        except Exception as exc:
+            finish_job(status="error", message=str(exc))
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": f"Failed to start HF job: {exc}",
+                },
+                status_code=500,
+            )
         return JSONResponse(
             {"ok": True, "message": "Model download started", "job": job},
             status_code=202,
@@ -300,12 +315,15 @@ def create_app() -> FastAPI:
                 status_code=409,
             )
 
-        job = start_job(
-            kind="dataset_import", message="Starting dataset import"
-        )
-        log_path = ROOT / "results" / "logs" / "dashboard-hf.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_file = log_path.open("ab")
+        try:
+            job = start_job(
+                kind="dataset_import", message="Starting dataset import"
+            )
+        except RuntimeError:
+            return JSONResponse(
+                {"ok": False, "message": "An HF job is already running"},
+                status_code=409,
+            )
         cmd = [
             sys.executable,
             str(ROOT / "scripts" / "run_hf_job.py"),
@@ -324,14 +342,26 @@ def create_app() -> FastAPI:
         if body.context_col is not None:
             cmd.extend(["--context-col", body.context_col])
         cmd.extend(["--limit", str(body.limit)])
-        subprocess.Popen(
-            cmd,
-            cwd=ROOT,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        log_file.close()
+        try:
+            log_path = ROOT / "results" / "logs" / "dashboard-hf.log"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("ab") as log_file:
+                subprocess.Popen(
+                    cmd,
+                    cwd=ROOT,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+        except Exception as exc:
+            finish_job(status="error", message=str(exc))
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": f"Failed to start HF job: {exc}",
+                },
+                status_code=500,
+            )
         return JSONResponse(
             {"ok": True, "message": "Dataset import started", "job": job},
             status_code=202,
