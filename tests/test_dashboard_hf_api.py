@@ -216,6 +216,36 @@ def test_dataset_import_spawns_with_optional_fields(monkeypatch):
     ]
 
 
+def test_dataset_import_defaults_split_to_train(monkeypatch):
+    monkeypatch.setattr("scripts.dashboard_api.is_job_running", lambda: False)
+    monkeypatch.setattr(
+        "scripts.dashboard_api.start_job",
+        lambda **kwargs: {"id": "3", "kind": kwargs["kind"], "status": "running"},
+    )
+    spawned = {}
+
+    class FakePopen:
+        def __init__(self, args, **kwargs):
+            spawned["args"] = args
+            self.pid = 3
+
+    monkeypatch.setattr("scripts.dashboard_api.subprocess.Popen", FakePopen)
+
+    response = TestClient(create_app()).post(
+        "/api/hf/datasets/import",
+        json={
+            "hf_id": "org/data",
+            "local_id": "local",
+            "question_col": "question",
+            "answer_col": "answer",
+        },
+    )
+
+    assert response.status_code == 202
+    split_index = spawned["args"].index("--split")
+    assert spawned["args"][split_index + 1] == "train"
+
+
 def test_import_rejects_secret_key():
     response = TestClient(create_app()).post(
         "/api/hf/datasets/import",

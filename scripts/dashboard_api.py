@@ -93,7 +93,7 @@ class HFDatasetImportPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     hf_id: str
-    split: str
+    split: str = "train"
     local_id: str
     question_col: str
     answer_col: str
