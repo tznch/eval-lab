@@ -8,12 +8,12 @@ import re
 def sanitize_local_id(raw: str, *, fallback: str = "import") -> str:
     s = raw.lower()
     s = re.sub(r"[^a-z0-9_-]", "-", s)
+    if s == "_template":
+        return "template"
     s = s.strip("-_")
     s = s.lstrip("_")
     if not s:
         return fallback
-    if s == "_template":
-        return "template"
     return s
 
 
