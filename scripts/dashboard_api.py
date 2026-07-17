@@ -22,6 +22,8 @@ from shared.profiles.io import (
     profile_to_yaml,
     write_env_profile,
 )
+from shared.hf_import.models import list_gguf_files
+from shared.hf_jobs import is_job_running, read_job, start_job
 from shared.reporting.dashboard_filters import parse_filter_params
 from shared.reporting.dashboard_views import (
     build_deepeval_groups,
@@ -71,6 +73,32 @@ class ModelDownloadPayload(BaseModel):
 
     profile: str | None = None
     model_id: str | None = None
+
+
+class HFModelFilesPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_id: str
+
+
+class HFModelDownloadPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_id: str
+    filename: str
+    model_id: str | None = None
+
+
+class HFDatasetImportPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    hf_id: str
+    split: str
+    local_id: str
+    question_col: str
+    answer_col: str
+    context_col: str | None = None
+    limit: int = 200
 
 
 class ProfileImportPayload(BaseModel):
@@ -140,6 +168,178 @@ def create_app() -> FastAPI:
     @app.get("/api/run-status")
     def api_run_status() -> JSONResponse:
         return JSONResponse(read_status() or {"status": "idle"})
+
+    @app.post("/api/hf/models/list-files")
+    def api_hf_model_files(payload: dict = Body(...)) -> JSONResponse:
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "files": [],
+                    "message": (
+                        "Secret keys not allowed in body: "
+                        + ", ".join(bad_keys)
+                    ),
+                },
+                status_code=400,
+            )
+        try:
+            body = HFModelFilesPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "files": [],
+                    "message": "Invalid request body: repo_id is required",
+                },
+                status_code=400,
+            )
+        try:
+            files = list_gguf_files(body.repo_id)
+        except Exception as exc:
+            return JSONResponse(
+                {"ok": False, "files": [], "message": str(exc)},
+                status_code=500,
+            )
+        return JSONResponse({"ok": True, "files": files})
+
+    @app.post("/api/hf/models/download")
+    def api_hf_model_download(payload: dict = Body(...)) -> JSONResponse:
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Secret keys not allowed in body: "
+                        + ", ".join(bad_keys)
+                    ),
+                },
+                status_code=400,
+            )
+        try:
+            body = HFModelDownloadPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Invalid request body: repo_id and filename are required; "
+                        "model_id is optional"
+                    ),
+                },
+                status_code=400,
+            )
+        if is_job_running():
+            return JSONResponse(
+                {"ok": False, "message": "An HF job is already running"},
+                status_code=409,
+            )
+
+        job = start_job(
+            kind="model_download", message="Starting model download"
+        )
+        log_path = ROOT / "results" / "logs" / "dashboard-hf.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = log_path.open("ab")
+        cmd = [
+            sys.executable,
+            str(ROOT / "scripts" / "run_hf_job.py"),
+            "model-download",
+            "--repo-id",
+            body.repo_id,
+            "--filename",
+            body.filename,
+        ]
+        if body.model_id is not None:
+            cmd.extend(["--model-id", body.model_id])
+        subprocess.Popen(
+            cmd,
+            cwd=ROOT,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        log_file.close()
+        return JSONResponse(
+            {"ok": True, "message": "Model download started", "job": job},
+            status_code=202,
+        )
+
+    @app.post("/api/hf/datasets/import")
+    def api_hf_dataset_import(payload: dict = Body(...)) -> JSONResponse:
+        bad_keys = sorted(_secret_keys_in(payload))
+        if bad_keys:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Secret keys not allowed in body: "
+                        + ", ".join(bad_keys)
+                    ),
+                },
+                status_code=400,
+            )
+        try:
+            body = HFDatasetImportPayload.model_validate(payload)
+        except ValidationError:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "message": (
+                        "Invalid request body: hf_id, split, local_id, "
+                        "question_col, and answer_col are required"
+                    ),
+                },
+                status_code=400,
+            )
+        if is_job_running():
+            return JSONResponse(
+                {"ok": False, "message": "An HF job is already running"},
+                status_code=409,
+            )
+
+        job = start_job(
+            kind="dataset_import", message="Starting dataset import"
+        )
+        log_path = ROOT / "results" / "logs" / "dashboard-hf.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file = log_path.open("ab")
+        cmd = [
+            sys.executable,
+            str(ROOT / "scripts" / "run_hf_job.py"),
+            "dataset-import",
+            "--hf-id",
+            body.hf_id,
+            "--split",
+            body.split,
+            "--local-id",
+            body.local_id,
+            "--question-col",
+            body.question_col,
+            "--answer-col",
+            body.answer_col,
+        ]
+        if body.context_col is not None:
+            cmd.extend(["--context-col", body.context_col])
+        cmd.extend(["--limit", str(body.limit)])
+        subprocess.Popen(
+            cmd,
+            cwd=ROOT,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        log_file.close()
+        return JSONResponse(
+            {"ok": True, "message": "Dataset import started", "job": job},
+            status_code=202,
+        )
+
+    @app.get("/api/hf/jobs/current")
+    def api_hf_current_job() -> JSONResponse:
+        return JSONResponse(read_job() or {"status": "idle"})
 
     @app.post("/api/models/download")
     def api_models_download(payload: dict = Body(...)) -> JSONResponse:
